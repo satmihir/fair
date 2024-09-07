@@ -1,6 +1,7 @@
 package data
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -70,7 +71,7 @@ func TestNewStructureFailsValidation(t *testing.T) {
 		Pd: .15,
 		Pi: .1,
 	}
-	_, err := NewStructure(config)
+	_, err := NewStructure(config, 1)
 	assert.Error(t, err)
 }
 
@@ -81,7 +82,7 @@ func TestNewStructure(t *testing.T) {
 		Pd: .1,
 		Pi: .15,
 	}
-	structure, err := NewStructure(config)
+	structure, err := NewStructure(config, 1)
 	assert.NoError(t, err)
 	assert.NotNil(t, structure)
 
@@ -91,13 +92,70 @@ func TestNewStructure(t *testing.T) {
 
 func TestHashes(t *testing.T) {
 	datum := []byte("hello world")
-	hashes := GenerateNHashesUsing64Bit(datum, 3)
+	hashes := generateNHashesUsing64Bit(datum, 3, 5)
 
 	assert.Equal(t, len(hashes), 3)
 
-	hashes2 := GenerateNHashesUsing64Bit(datum, 3)
+	hashes2 := generateNHashesUsing64Bit(datum, 3, 5)
 
 	assert.Equal(t, hashes[0], hashes2[0])
 	assert.Equal(t, hashes[1], hashes2[1])
 	assert.Equal(t, hashes[2], hashes2[2])
+}
+
+func TestGetId(t *testing.T) {
+	config := &StructureConfig{
+		L:  2,
+		M:  24,
+		Pd: .1,
+		Pi: .15,
+	}
+	structure, err := NewStructure(config, 1)
+	assert.NoError(t, err)
+	assert.NotNil(t, structure)
+
+	assert.Equal(t, structure.GetId(), uint32(1))
+}
+
+func TestEndToEnd(t *testing.T) {
+	config := &StructureConfig{
+		L:  2,
+		M:  24,
+		Pd: .1,
+		Pi: .15,
+	}
+	structure, err := NewStructure(config, 1)
+	assert.NoError(t, err)
+	assert.NotNil(t, structure)
+
+	assert.Equal(t, structure.GetId(), uint32(1))
+
+	ctx := context.Background()
+	id := []byte("hello_world")
+
+	resp, err := structure.RegisterRequest(ctx, id)
+	assert.NoError(t, err)
+	assert.NotNil(t, resp)
+	assert.False(t, resp.ShouldThrottle)
+
+	structure.ReportOutcome(ctx, id, OutcomeSuccess)
+
+	resp, err = structure.RegisterRequest(ctx, id)
+	assert.NoError(t, err)
+	assert.NotNil(t, resp)
+	assert.False(t, resp.ShouldThrottle)
+
+	for i := 0; i < 1000; i++ {
+		structure.ReportOutcome(ctx, id, OutcomeFailure)
+	}
+
+	resp, err = structure.RegisterRequest(ctx, id)
+	assert.NoError(t, err)
+	assert.NotNil(t, resp)
+	assert.True(t, resp.ShouldThrottle)
+}
+
+func TestAdjustProbability(t *testing.T) {
+	res := adjustProbability(0.90, .01, 10)
+	assert.Equal(t, res, 0.89991000449985)
 }
