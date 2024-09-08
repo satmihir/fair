@@ -4,85 +4,86 @@ import (
 	"context"
 	"testing"
 
+	"github.com/satmihir/fair/pkg/config"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestValidateStructConfig(t *testing.T) {
-	config := &StructureConfig{
+	conf := &config.FairnessTrackerConfig{
 		L: 0,
 	}
 
-	err := validateStructureConfig(config)
+	err := validateStructureConfig(conf)
 	assert.Error(t, err)
 
-	config = &StructureConfig{
+	conf = &config.FairnessTrackerConfig{
 		L: 1,
 		M: 0,
 	}
 
-	err = validateStructureConfig(config)
+	err = validateStructureConfig(conf)
 	assert.Error(t, err)
 
-	config = &StructureConfig{
+	conf = &config.FairnessTrackerConfig{
 		L:  1,
 		M:  1,
 		Pd: 0,
 		Pi: 0,
 	}
 
-	err = validateStructureConfig(config)
+	err = validateStructureConfig(conf)
 	assert.Error(t, err)
 
-	config = &StructureConfig{
+	conf = &config.FairnessTrackerConfig{
 		L:  1,
 		M:  1,
 		Pd: 10,
 		Pi: 10,
 	}
 
-	err = validateStructureConfig(config)
+	err = validateStructureConfig(conf)
 	assert.Error(t, err)
 
-	config = &StructureConfig{
+	conf = &config.FairnessTrackerConfig{
 		L:  1,
 		M:  1,
 		Pd: .15,
 		Pi: .1,
 	}
 
-	err = validateStructureConfig(config)
+	err = validateStructureConfig(conf)
 	assert.Error(t, err)
 
-	config = &StructureConfig{
+	conf = &config.FairnessTrackerConfig{
 		L:  1,
 		M:  1,
 		Pd: .1,
 		Pi: .15,
 	}
 
-	err = validateStructureConfig(config)
+	err = validateStructureConfig(conf)
 	assert.NoError(t, err)
 }
 
 func TestNewStructureFailsValidation(t *testing.T) {
-	config := &StructureConfig{
+	conf := &config.FairnessTrackerConfig{
 		L:  1,
 		M:  1,
 		Pd: .15,
 		Pi: .1,
 	}
-	_, err := NewStructure(config, 1)
+	_, err := NewStructure(conf, 1)
 	assert.Error(t, err)
 }
 
 func TestNewStructure(t *testing.T) {
-	config := &StructureConfig{
+	conf := &config.FairnessTrackerConfig{
 		L:  2,
 		M:  24,
 		Pd: .1,
 		Pi: .15,
 	}
-	structure, err := NewStructure(config, 1)
+	structure, err := NewStructure(conf, 1)
 	assert.NoError(t, err)
 	assert.NotNil(t, structure)
 
@@ -104,13 +105,13 @@ func TestHashes(t *testing.T) {
 }
 
 func TestGetId(t *testing.T) {
-	config := &StructureConfig{
+	conf := &config.FairnessTrackerConfig{
 		L:  2,
 		M:  24,
 		Pd: .1,
 		Pi: .15,
 	}
-	structure, err := NewStructure(config, 1)
+	structure, err := NewStructure(conf, 1)
 	assert.NoError(t, err)
 	assert.NotNil(t, structure)
 
@@ -118,13 +119,13 @@ func TestGetId(t *testing.T) {
 }
 
 func TestEndToEnd(t *testing.T) {
-	config := &StructureConfig{
+	conf := &config.FairnessTrackerConfig{
 		L:  2,
 		M:  24,
 		Pd: .1,
 		Pi: .15,
 	}
-	structure, err := NewStructure(config, 1)
+	structure, err := NewStructure(conf, 1)
 	assert.NoError(t, err)
 	assert.NotNil(t, structure)
 

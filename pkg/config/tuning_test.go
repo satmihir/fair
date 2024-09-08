@@ -1,4 +1,4 @@
-package tuning
+package config
 
 import (
 	"testing"

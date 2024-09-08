@@ -1,9 +1,7 @@
-package tuning
+package config
 
 import (
 	"math"
-
-	"github.com/satmihir/fair/pkg/data"
 )
 
 const (
@@ -13,6 +11,8 @@ const (
 	defaultBucketsPerLevel = 1000
 	// Number of acceptable "bad" requests before a flow gets fully shut down
 	defaultTolerableBadRequestsPerBadFlow = 25
+	// The decay rate lambda of the probability with time to avoid permanently banning workloads
+	defaultDecayRate = 0.01
 	// Percent of the expected client flows assumed to be "bad" in the sense of
 	// needing fairness throttle (.1%)
 	percentBadClientFlows = 0.001
@@ -25,7 +25,7 @@ const (
 )
 
 // The default config that's supposed to work in most cases
-func DefaultStructureConfig() *data.StructureConfig {
+func DefaultStructureConfig() *FairnessTrackerConfig {
 	return GenerateTunedStructureConfig(
 		defaultExpectedClientFlows,
 		defaultBucketsPerLevel,
@@ -42,7 +42,7 @@ func DefaultStructureConfig() *data.StructureConfig {
 // expectedClientFlows - Number of concurrent clients you expect to your app
 // bucketsPerLevel - Number of buckets per level in the core structure
 // tolerableBadRequestsPerBadFlow - Number of requests we can tolerate before we fully shut down a flow
-func GenerateTunedStructureConfig(expectedClientFlows, bucketsPerLevel, tolerableBadRequestsPerBadFlow uint32) *data.StructureConfig {
+func GenerateTunedStructureConfig(expectedClientFlows, bucketsPerLevel, tolerableBadRequestsPerBadFlow uint32) *FairnessTrackerConfig {
 	M := uint32(math.Ceil(float64(expectedClientFlows) * percentBadClientFlows))
 	L := CalculateL(bucketsPerLevel, M, lowProbability)
 	if L < minL {
@@ -54,11 +54,12 @@ func GenerateTunedStructureConfig(expectedClientFlows, bucketsPerLevel, tolerabl
 	// We want a slower recovery than the speed of marking workloads as bad
 	Pd := pdSlowingFactor * Pi
 
-	return &data.StructureConfig{
-		M:  bucketsPerLevel,
-		L:  L,
-		Pi: Pi,
-		Pd: Pd,
+	return &FairnessTrackerConfig{
+		M:      bucketsPerLevel,
+		L:      L,
+		Pi:     Pi,
+		Pd:     Pd,
+		Lambda: defaultDecayRate,
 	}
 }
 

@@ -21,20 +21,6 @@ const (
 	OutcomeFailure
 )
 
-// The config for the underlying data structure. Largely for internal use.
-type StructureConfig struct {
-	// Size of the row at each level
-	M uint32
-	// Number of levels in the structure
-	L uint32
-	// The delta P to add to a bucket's probability when there's an error
-	Pi float64
-	// The delta P to subtract from a bucket's probability when there's a success
-	Pd float64
-	// The exponential decay rate for the probabilities
-	lambda float64
-}
-
 // The data struecture interface
 type IStructure interface {
 	// Return the int ID of this structure. Used for implementing moving hashes.

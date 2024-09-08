@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/satmihir/fair/pkg/config"
 	"github.com/spaolacci/murmur3"
 )
 
@@ -38,14 +39,14 @@ type Structure struct {
 	// of throttling the request.
 	levels [][]*bucket
 	// The config associated with this structure
-	config *StructureConfig
+	config *config.FairnessTrackerConfig
 	// The unique ID of the structure
 	id uint32
 	// The murmur hash seed
 	murmurSeed uint32
 }
 
-func NewStructure(config *StructureConfig, id uint32) (*Structure, error) {
+func NewStructure(config *config.FairnessTrackerConfig, id uint32) (*Structure, error) {
 	if err := validateStructureConfig(config); err != nil {
 		return nil, NewDataError(err, "The input config failed validation: %v", config)
 	}
@@ -130,7 +131,7 @@ func (s *Structure) visitBuckets(clientIdentifier []byte, fn func(*bucket) error
 
 		cur := currentMillis()
 		deltaT := cur - buck.lastUpdatedTimeMillis
-		pm := adjustProbability(buck.probability, s.config.lambda, deltaT)
+		pm := adjustProbability(buck.probability, s.config.Lambda, deltaT)
 
 		buck.lastUpdatedTimeMillis = cur
 		buck.probability = pm
@@ -147,7 +148,7 @@ func (s *Structure) visitBuckets(clientIdentifier []byte, fn func(*bucket) error
 }
 
 // Validate the input config against invariants
-func validateStructureConfig(config *StructureConfig) error {
+func validateStructureConfig(config *config.FairnessTrackerConfig) error {
 	if config.L <= 0 || config.M <= 0 {
 		return fmt.Errorf("the values of L and M must be at least 1, found L: %d and M: %d", config.L, config.M)
 	}
