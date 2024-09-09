@@ -1,5 +1,7 @@
 package config
 
+import "time"
+
 // The config for the underlying data structure. Largely for internal use.
 type FairnessTrackerConfig struct {
 	// Size of the row at each level
@@ -12,4 +14,6 @@ type FairnessTrackerConfig struct {
 	Pd float64
 	// The exponential decay rate for the probabilities
 	Lambda float64
+	// The frequency of rotation
+	RotationFrequency time.Duration
 }

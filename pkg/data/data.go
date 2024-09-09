@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/satmihir/fair/pkg/config"
+	"github.com/satmihir/fair/pkg/request"
 	"github.com/spaolacci/murmur3"
 )
 
@@ -41,12 +42,12 @@ type Structure struct {
 	// The config associated with this structure
 	config *config.FairnessTrackerConfig
 	// The unique ID of the structure
-	id uint32
+	id uint64
 	// The murmur hash seed
 	murmurSeed uint32
 }
 
-func NewStructure(config *config.FairnessTrackerConfig, id uint32) (*Structure, error) {
+func NewStructure(config *config.FairnessTrackerConfig, id uint64) (*Structure, error) {
 	if err := validateStructureConfig(config); err != nil {
 		return nil, NewDataError(err, "The input config failed validation: %v", config)
 	}
@@ -68,11 +69,14 @@ func NewStructure(config *config.FairnessTrackerConfig, id uint32) (*Structure, 
 	}, nil
 }
 
-func (s *Structure) GetId() uint32 {
+func (s *Structure) GetId() uint64 {
 	return s.id
 }
 
-func (s *Structure) RegisterRequest(ctx context.Context, clientIdentifier []byte) (*RegisterResponse, error) {
+func (s *Structure) Close() {
+}
+
+func (s *Structure) RegisterRequest(ctx context.Context, clientIdentifier []byte) (*request.RegisterRequestResult, error) {
 	var pmin float64 = 1
 
 	// We can ignore the error since the handler never returns one
@@ -90,18 +94,18 @@ func (s *Structure) RegisterRequest(ctx context.Context, clientIdentifier []byte
 		shouldThrottle = true
 	}
 
-	return &RegisterResponse{
+	return &request.RegisterRequestResult{
 		ShouldThrottle: shouldThrottle,
 	}, nil
 }
 
-func (s *Structure) ReportOutcome(ctx context.Context, clientIdentifier []byte, outcome Outcome) error {
+func (s *Structure) ReportOutcome(ctx context.Context, clientIdentifier []byte, outcome request.Outcome) (*request.ReportOutcomeResult, error) {
 	adjustment := s.config.Pi
-	if outcome == OutcomeSuccess {
+	if outcome == request.OutcomeSuccess {
 		adjustment = -1 * s.config.Pd
 	}
 
-	return s.visitBuckets(clientIdentifier, func(b *bucket) error {
+	err := s.visitBuckets(clientIdentifier, func(b *bucket) error {
 		p := b.probability + adjustment
 		if p < 0 {
 			p = 0
@@ -116,6 +120,8 @@ func (s *Structure) ReportOutcome(ctx context.Context, clientIdentifier []byte, 
 
 		return nil
 	})
+
+	return &request.ReportOutcomeResult{}, err
 }
 
 // Visit the buckets belonging to the given clientIdentifier

@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/satmihir/fair/pkg/config"
+	"github.com/satmihir/fair/pkg/request"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -115,7 +116,7 @@ func TestGetId(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NotNil(t, structure)
 
-	assert.Equal(t, structure.GetId(), uint32(1))
+	assert.Equal(t, int(structure.GetId()), 1)
 }
 
 func TestEndToEnd(t *testing.T) {
@@ -129,7 +130,7 @@ func TestEndToEnd(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NotNil(t, structure)
 
-	assert.Equal(t, structure.GetId(), uint32(1))
+	assert.Equal(t, int(structure.GetId()), 1)
 
 	ctx := context.Background()
 	id := []byte("hello_world")
@@ -139,7 +140,7 @@ func TestEndToEnd(t *testing.T) {
 	assert.NotNil(t, resp)
 	assert.False(t, resp.ShouldThrottle)
 
-	structure.ReportOutcome(ctx, id, OutcomeSuccess)
+	structure.ReportOutcome(ctx, id, request.OutcomeSuccess)
 
 	resp, err = structure.RegisterRequest(ctx, id)
 	assert.NoError(t, err)
@@ -147,7 +148,7 @@ func TestEndToEnd(t *testing.T) {
 	assert.False(t, resp.ShouldThrottle)
 
 	for i := 0; i < 1000; i++ {
-		structure.ReportOutcome(ctx, id, OutcomeFailure)
+		structure.ReportOutcome(ctx, id, request.OutcomeFailure)
 	}
 
 	resp, err = structure.RegisterRequest(ctx, id)

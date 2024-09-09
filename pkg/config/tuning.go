@@ -2,6 +2,7 @@ package config
 
 import (
 	"math"
+	"time"
 )
 
 const (
@@ -22,10 +23,12 @@ const (
 	pdSlowingFactor = 0.1
 	// The minimum number og levels to use despite what the calculation says
 	minL = 3
+	// The default rotation duration
+	defaultRotationDuration = time.Minute * 5
 )
 
 // The default config that's supposed to work in most cases
-func DefaultStructureConfig() *FairnessTrackerConfig {
+func DefaultFairnessTrackerConfig() *FairnessTrackerConfig {
 	return GenerateTunedStructureConfig(
 		defaultExpectedClientFlows,
 		defaultBucketsPerLevel,
@@ -55,11 +58,12 @@ func GenerateTunedStructureConfig(expectedClientFlows, bucketsPerLevel, tolerabl
 	Pd := pdSlowingFactor * Pi
 
 	return &FairnessTrackerConfig{
-		M:      bucketsPerLevel,
-		L:      L,
-		Pi:     Pi,
-		Pd:     Pd,
-		Lambda: defaultDecayRate,
+		M:                 bucketsPerLevel,
+		L:                 L,
+		Pi:                Pi,
+		Pd:                Pd,
+		Lambda:            defaultDecayRate,
+		RotationFrequency: defaultRotationDuration,
 	}
 }
 

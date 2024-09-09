@@ -21,7 +21,7 @@ func TestGenerateTunedStructureConfig(t *testing.T) {
 }
 
 func TestDefaultStructureConfig(t *testing.T) {
-	conf := DefaultStructureConfig()
+	conf := DefaultFairnessTrackerConfig()
 	assert.Equal(t, int(conf.L), 3)
 	assert.Equal(t, int(conf.M), 1000)
 	assert.Equal(t, conf.Pi*25, float64(1))

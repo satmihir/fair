@@ -21,3 +21,66 @@ Then, import it into your Go code:
 ```go
 import "github.com/satmihir/fair"
 ```
+
+## Usage
+
+To use the default config which should work well is most cases:
+
+```go
+trkB := NewFairnessTrackerBuilder()
+trk, err := trkB.BuildWithDefaultConfig()
+```
+
+If you want to make some changes to the config, you can use the setters on the builder:
+
+```go
+trkB := NewFairnessTrackerBuilder()
+
+// Rotate the underlying hashes every one minute to avoid correlated false positives
+trkB.SetRotationFrequency(1 * time.Minute)
+
+trk, err := trkB.Build()
+```
+
+For every incoming request, you have to pass the flow identifier (the id over which you want to maintain fairness) into the tracket to see if it needs to be throttled. A client ID for example could be such ID to maintain resource fairness among all your clients.
+
+```go
+ctx := context.Background()
+id := []byte("client_id")
+
+resp, _ := trk.RegisterRequest(ctx, id)
+if resp.ShouldThrottle {
+    throttleRequest()
+}
+```
+
+For any failure that indicates a shortage of resource (which is our trigger to start throttling), you report outcome as a failure. For any other outcomes that are considered failures in your business logic that don't indicate resource shortage, do not report any outcome.
+
+```go
+ctx := context.Background()
+id := []byte("client_id")
+
+trk.ReportOutcome(ctx, id, request.OutcomeFailure)
+```
+
+On the other hand, when you are able to get the resource, you report success.
+
+```go
+ctx := context.Background()
+id := []byte("client_id")
+
+trk.ReportOutcome(ctx, id, request.OutcomeSuccess)
+```
+
+## Tuning
+
+You can use the `GenerateTunedStructureConfig` to tune the tracker without directly touching the algorithm parameters. It exposes a simple interface where you have to pass the following things based on your application logic and scaling requirements.
+- `expectedClientFlows` - Number of concurrent clients you expect to your app
+- `bucketsPerLevel` - Number of buckets per level in the core structure
+- `tolerableBadRequestsPerBadFlow` - Number of requests we can tolerate before we fully shut down a flow
+
+```go
+conf := config.GenerateTunedStructureConfig(1000, 1000, 25)
+trkB := NewFairnessTrackerBuilder()
+trk, err := trkB.BuildWithConfig(config)
+```
