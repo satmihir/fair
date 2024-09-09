@@ -1,4 +1,5 @@
 # FAIR
+![Coverage](https://img.shields.io/badge/Coverage-88.1%25-brightgreen)
 
 FAIR is a Go library designed to ensure fairness in resource-constrained environments. It helps distribute limited resources (e.g., database/blob storage throughput, job execution resources etc.) evenly across multiple clients, preventing over-allocation to a small subset and ensuring equitable access.
 

@@ -1,0 +1,58 @@
+# This workflow will build a golang project
+# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-go
+
+name: Go
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.22'
+
+    - name: Build
+      run: go build -v ./...
+
+    - name: Test
+      run: |
+        go test -v ./... -covermode=count -coverprofile=coverage.out
+        go tool cover -func=coverage.out -o=coverage.out
+
+    - name: Go Coverage Badge
+      uses: tj-actions/coverage-badge-go@v2.4.2
+      with:
+        filename: coverage.out
+
+    - name: Verify Changed files
+      uses: tj-actions/verify-changed-files@v16
+      id: verify-changed-files
+      with:
+        files: README.md
+
+    - name: Commit changes
+      if: steps.verify-changed-files.outputs.files_changed == 'true'
+      run: |
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        git add README.md
+        git commit -m "chore: Updated coverage badge."
+
+    - name: Push changes
+      if: steps.verify-changed-files.outputs.files_changed == 'true'
+      uses: ad-m/github-push-action@master
+      with:
+        github_token: ${{ github.token }}
+        branch: ${{ github.head_ref }}
+
