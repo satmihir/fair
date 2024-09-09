@@ -1,4 +1,5 @@
 # FAIR
+![Coverage](https://img.shields.io/badge/Coverage-88.1%25-brightgreen)
 
 FAIR (**F**air **A**llocation of **I**nsufficient **R**esources) is a Go library to add fairness to your service or application.
 
