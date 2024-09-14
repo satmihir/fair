@@ -14,6 +14,12 @@ The core algorithm of FAIR is based on the [Stochastic Fair BLUE](https://rtcl.e
 - Scalable to large numbers of clients with constant memory requirements.
 - A simple resource and error tracking model that can be easily morphed into many types of throttling scenarios.
 
+### Evaluation
+
+![Evaluation](eval.png)
+
+In this example, 20 clients are competing for a resource that regenerates at the rate of 20/s (every data point in the graph is 5s apart). 18 out of 20 clients are "well behaved" because they request a resource every second while the remaining two clients try to get a resource every 100ms which is an "unfair" rate. On the left, we see that when left unthrottled, the two unfair clients grab a disproportionately large amount of resource while the regular workloads starve and get a lot less than 1/s rate. On the right, when throttled with fair, the regular workloads stay virtually unaffected while the unfair ones get throttled. On average, even the unfair workloads get their fair share when seen over larger time periods.
+
 ## Installation
 
 To install the FAIR library, use `go get`:
