@@ -60,18 +60,19 @@ func NewFairnessTracker(trackerConfig *config.FairnessTrackerConfig) (*FairnessT
 				return
 			case <-tikr.C:
 				ft.rotationLock.Lock()
-				defer ft.rotationLock.Unlock()
 
 				s, err := data.NewStructure(trackerConfig, ft.structureIdCtr)
 				ft.structureIdCtr++
 
 				if err != nil {
+					ft.rotationLock.Unlock()
 					// TODO: While this should never happen, think if we want to handle this more gracefully
 					log.Fatalf("Failed to create a structure during rotation")
 				}
 
 				ft.mainStructure = ft.secondaryStructure
 				ft.secondaryStructure = s
+				ft.rotationLock.Unlock()
 			}
 		}
 	}()
