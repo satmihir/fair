@@ -3,8 +3,11 @@ package tracker
 import (
 	"fmt"
 	"testing"
+	"time"
 
+	"github.com/satmihir/fair/pkg/config"
 	"github.com/satmihir/fair/pkg/testutils"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestFairnessTrackerError(t *testing.T) {
@@ -12,4 +15,28 @@ func TestFairnessTrackerError(t *testing.T) {
 	dataErr := NewFairnessTrackerError(origErr, "data error occurred")
 
 	testutils.TestError(t, &FairnessTrackerError{}, dataErr, "data error occurred: original error", origErr)
+}
+
+func TestBuildFairnessTracker(t *testing.T) {
+	b := NewFairnessTrackerBuilder()
+	b.SetL(10)
+	b.SetM(10)
+	b.SetPd(.1)
+	b.SetPi(.2)
+	b.SetLambda(.001)
+	b.SetRotationFrequency(1 * time.Second)
+
+	tr, err := b.Build()
+	assert.NoError(t, err)
+	assert.Equal(t, int(tr.trackerConfig.L), 10)
+	assert.Equal(t, int(tr.trackerConfig.M), 10)
+}
+
+func TestBuildWithConfig(t *testing.T) {
+	c := config.GenerateTunedStructureConfig(10, 10, 10)
+	b := NewFairnessTrackerBuilder()
+	tr, err := b.BuildWithConfig(c)
+	assert.NoError(t, err)
+	assert.Equal(t, int(tr.trackerConfig.L), 4)
+	assert.Equal(t, int(tr.trackerConfig.M), 10)
 }
