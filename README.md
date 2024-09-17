@@ -56,7 +56,7 @@ trk, err := trkB.Build()
 defer trk.Close()
 ```
 
-For every incoming request, you have to pass the flow identifier (the id over which you want to maintain fairness) into the tracket to see if it needs to be throttled. A client ID for example could be such ID to maintain resource fairness among all your clients.
+For every incoming request, you have to pass the flow identifier (the id over which you want to maintain fairness) into the tracker to see if it needs to be throttled. A client ID for example could be such ID to maintain resource fairness among all your clients.
 
 ```go
 ctx := context.Background()
