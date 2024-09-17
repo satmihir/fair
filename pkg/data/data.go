@@ -6,10 +6,10 @@ import (
 	"math"
 	"math/rand"
 	"sync"
-	"time"
 
 	"github.com/satmihir/fair/pkg/config"
 	"github.com/satmihir/fair/pkg/request"
+	"github.com/satmihir/fair/pkg/utils"
 	"github.com/spaolacci/murmur3"
 )
 
@@ -23,10 +23,10 @@ type bucket struct {
 	lock *sync.Mutex
 }
 
-func NewBucket() *bucket {
+func NewBucket(clock utils.IClock) *bucket {
 	return &bucket{
 		probability:           0,
-		lastUpdatedTimeMillis: currentMillis(),
+		lastUpdatedTimeMillis: uint64(clock.Now().UnixMilli()),
 		lock:                  &sync.Mutex{},
 	}
 }
@@ -45,9 +45,11 @@ type Structure struct {
 	id uint64
 	// The murmur hash seed
 	murmurSeed uint32
+	// The clock to use for getting the time
+	clock utils.IClock
 }
 
-func NewStructure(config *config.FairnessTrackerConfig, id uint64) (*Structure, error) {
+func NewStructureWithClock(config *config.FairnessTrackerConfig, id uint64, clock utils.IClock) (*Structure, error) {
 	if err := validateStructureConfig(config); err != nil {
 		return nil, NewDataError(err, "The input config failed validation: %v", config)
 	}
@@ -57,7 +59,7 @@ func NewStructure(config *config.FairnessTrackerConfig, id uint64) (*Structure, 
 		levels[i] = make([]*bucket, config.M)
 
 		for j := 0; j < int(config.M); j++ {
-			levels[i][j] = NewBucket()
+			levels[i][j] = NewBucket(clock)
 		}
 	}
 
@@ -66,7 +68,12 @@ func NewStructure(config *config.FairnessTrackerConfig, id uint64) (*Structure, 
 		config:     config,
 		id:         id,
 		murmurSeed: rand.Uint32(),
+		clock:      clock,
 	}, nil
+}
+
+func NewStructure(config *config.FairnessTrackerConfig, id uint64) (*Structure, error) {
+	return NewStructureWithClock(config, id, utils.NewRealClock())
 }
 
 func (s *Structure) GetId() uint64 {
@@ -116,7 +123,7 @@ func (s *Structure) ReportOutcome(ctx context.Context, clientIdentifier []byte, 
 		}
 
 		b.probability = p
-		b.lastUpdatedTimeMillis = currentMillis()
+		b.lastUpdatedTimeMillis = s.currentMillis()
 
 		return nil
 	})
@@ -135,7 +142,7 @@ func (s *Structure) visitBuckets(clientIdentifier []byte, fn func(*bucket) error
 
 		buck.lock.Lock()
 
-		cur := currentMillis()
+		cur := s.currentMillis()
 		deltaT := cur - buck.lastUpdatedTimeMillis
 		pm := adjustProbability(buck.probability, s.config.Lambda, deltaT)
 
@@ -151,6 +158,10 @@ func (s *Structure) visitBuckets(clientIdentifier []byte, fn func(*bucket) error
 	}
 
 	return nil
+}
+
+func (s *Structure) currentMillis() uint64 {
+	return uint64(s.clock.Now().UnixMilli())
 }
 
 // Validate the input config against invariants
@@ -211,8 +222,4 @@ func adjustProbability(prob float64, lambda float64, deltaMs uint64) float64 {
 		return 0
 	}
 	return decayedProb
-}
-
-func currentMillis() uint64 {
-	return uint64(time.Now().UnixMilli())
 }

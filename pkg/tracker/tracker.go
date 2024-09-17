@@ -4,11 +4,11 @@ import (
 	"context"
 	"log"
 	"sync"
-	"time"
 
 	"github.com/satmihir/fair/pkg/config"
 	"github.com/satmihir/fair/pkg/data"
 	"github.com/satmihir/fair/pkg/request"
+	"github.com/satmihir/fair/pkg/utils"
 )
 
 // The main public facing object from this library
@@ -22,11 +22,14 @@ type FairnessTracker struct {
 	mainStructure      request.Tracker
 	secondaryStructure request.Tracker
 
+	tikr utils.ITicker
+
 	rotationLock *sync.Mutex
 	stopRotation chan bool
 }
 
-func NewFairnessTracker(trackerConfig *config.FairnessTrackerConfig) (*FairnessTracker, error) {
+// Allows passing an external ticket for simulations
+func NewFairnessTrackerWithTicker(trackerConfig *config.FairnessTrackerConfig, tikr utils.ITicker) (*FairnessTracker, error) {
 	st1, err := data.NewStructure(trackerConfig, 1)
 	if err != nil {
 		return nil, NewFairnessTrackerError(err, "Failed to create a structure")
@@ -45,6 +48,8 @@ func NewFairnessTracker(trackerConfig *config.FairnessTrackerConfig) (*FairnessT
 		mainStructure:      st1,
 		secondaryStructure: st2,
 
+		tikr: tikr,
+
 		rotationLock: &sync.Mutex{},
 		stopRotation: stopRotation,
 	}
@@ -52,24 +57,21 @@ func NewFairnessTracker(trackerConfig *config.FairnessTrackerConfig) (*FairnessT
 	// Start a periodic task to rotate underlying structures to keep
 	// changing the hash seeds so we don't continue punishing the same
 	// innocent workloads repeatedly in the worst case of a false positive.
-	tikr := time.NewTicker(trackerConfig.RotationFrequency)
 	go func() {
 		for {
 			select {
 			case <-stopRotation:
 				return
-			case <-tikr.C:
-				ft.rotationLock.Lock()
-
+			case <-tikr.C():
 				s, err := data.NewStructure(trackerConfig, ft.structureIdCtr)
 				ft.structureIdCtr++
 
 				if err != nil {
-					ft.rotationLock.Unlock()
 					// TODO: While this should never happen, think if we want to handle this more gracefully
 					log.Fatalf("Failed to create a structure during rotation")
 				}
 
+				ft.rotationLock.Lock()
 				ft.mainStructure = ft.secondaryStructure
 				ft.secondaryStructure = s
 				ft.rotationLock.Unlock()
@@ -78,6 +80,11 @@ func NewFairnessTracker(trackerConfig *config.FairnessTrackerConfig) (*FairnessT
 	}()
 
 	return ft, nil
+}
+
+func NewFairnessTracker(trackerConfig *config.FairnessTrackerConfig) (*FairnessTracker, error) {
+	tikr := utils.NewRealTicker(trackerConfig.RotationFrequency)
+	return NewFairnessTrackerWithTicker(trackerConfig, tikr)
 }
 
 func (ft *FairnessTracker) RegisterRequest(ctx context.Context, clientIdentifier []byte) (*request.RegisterRequestResult, error) {
@@ -119,4 +126,5 @@ func (ft *FairnessTracker) ReportOutcome(ctx context.Context, clientIdentifier [
 
 func (ft *FairnessTracker) Close() {
 	close(ft.stopRotation)
+	ft.tikr.Stop()
 }
