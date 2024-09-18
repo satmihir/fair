@@ -16,4 +16,6 @@ type FairnessTrackerConfig struct {
 	Lambda float64
 	// The frequency of rotation
 	RotationFrequency time.Duration
+	// Include result stats. Useful for debugging but may slightly affect performance.
+	IncludeStats bool
 }

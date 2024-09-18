@@ -47,9 +47,11 @@ type Structure struct {
 	murmurSeed uint32
 	// The clock to use for getting the time
 	clock utils.IClock
+	// Includes stats in results. Useful for debugging but may slightly affect performance.
+	includeStats bool
 }
 
-func NewStructureWithClock(config *config.FairnessTrackerConfig, id uint64, clock utils.IClock) (*Structure, error) {
+func NewStructureWithClock(config *config.FairnessTrackerConfig, id uint64, includeStats bool, clock utils.IClock) (*Structure, error) {
 	if err := validateStructureConfig(config); err != nil {
 		return nil, NewDataError(err, "The input config failed validation: %v", config)
 	}
@@ -64,16 +66,17 @@ func NewStructureWithClock(config *config.FairnessTrackerConfig, id uint64, cloc
 	}
 
 	return &Structure{
-		levels:     levels,
-		config:     config,
-		id:         id,
-		murmurSeed: rand.Uint32(),
-		clock:      clock,
+		levels:       levels,
+		config:       config,
+		id:           id,
+		murmurSeed:   rand.Uint32(),
+		clock:        clock,
+		includeStats: includeStats,
 	}, nil
 }
 
-func NewStructure(config *config.FairnessTrackerConfig, id uint64) (*Structure, error) {
-	return NewStructureWithClock(config, id, utils.NewRealClock())
+func NewStructure(config *config.FairnessTrackerConfig, id uint64, includeStats bool) (*Structure, error) {
+	return NewStructureWithClock(config, id, includeStats, utils.NewRealClock())
 }
 
 func (s *Structure) GetId() uint64 {
@@ -84,12 +87,27 @@ func (s *Structure) Close() {
 }
 
 func (s *Structure) RegisterRequest(ctx context.Context, clientIdentifier []byte) (*request.RegisterRequestResult, error) {
+	var stats *request.ResultStats
+
 	var pmin float64 = 1
 
 	// We can ignore the error since the handler never returns one
-	s.visitBuckets(clientIdentifier, func(b *bucket) error {
+	s.visitBuckets(clientIdentifier, func(l uint32, m uint32, b *bucket) error {
 		if b.probability < pmin {
 			pmin = b.probability
+		}
+
+		if s.includeStats {
+			if stats == nil {
+				stats = &request.ResultStats{
+					BucketIndexes:       make([]int, s.config.L),
+					BucketProbabilities: make([]float64, s.config.L),
+				}
+			}
+
+			stats.BucketIndexes[l] = int(m)
+			stats.BucketProbabilities[l] = b.probability
+			stats.FinalProbability = pmin
 		}
 
 		return nil
@@ -103,6 +121,7 @@ func (s *Structure) RegisterRequest(ctx context.Context, clientIdentifier []byte
 
 	return &request.RegisterRequestResult{
 		ShouldThrottle: shouldThrottle,
+		ResultStats:    stats,
 	}, nil
 }
 
@@ -112,7 +131,7 @@ func (s *Structure) ReportOutcome(ctx context.Context, clientIdentifier []byte, 
 		adjustment = -1 * s.config.Pd
 	}
 
-	err := s.visitBuckets(clientIdentifier, func(b *bucket) error {
+	err := s.visitBuckets(clientIdentifier, func(l uint32, m uint32, b *bucket) error {
 		p := b.probability + adjustment
 		if p < 0 {
 			p = 0
@@ -133,12 +152,13 @@ func (s *Structure) ReportOutcome(ctx context.Context, clientIdentifier []byte, 
 
 // Visit the buckets belonging to the given clientIdentifier
 // Also takes the bucket lock and manages probability decay prior to calling the handler
-func (s *Structure) visitBuckets(clientIdentifier []byte, fn func(*bucket) error) error {
+func (s *Structure) visitBuckets(clientIdentifier []byte, fn func(uint32, uint32, *bucket) error) error {
 	levelHashes := generateNHashesUsing64Bit(clientIdentifier, s.config.L, s.murmurSeed)
 
 	for l := 0; l < int(s.config.L); l++ {
 		lvl := s.levels[l]
-		buck := lvl[levelHashes[l]%s.config.M]
+		m := levelHashes[l] % s.config.M
+		buck := lvl[m]
 
 		buck.lock.Lock()
 
@@ -149,7 +169,7 @@ func (s *Structure) visitBuckets(clientIdentifier []byte, fn func(*bucket) error
 		buck.lastUpdatedTimeMillis = cur
 		buck.probability = pm
 
-		if err := fn(buck); err != nil {
+		if err := fn(uint32(l), m, buck); err != nil {
 			buck.lock.Unlock()
 			return err
 		}

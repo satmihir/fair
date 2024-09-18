@@ -50,6 +50,10 @@ func (bl *FairnessTrackerBuilder) SetLambda(Lambda float64) {
 	bl.configuration.Lambda = Lambda
 }
 
+func (bl *FairnessTrackerBuilder) SetIncludeStats(IncludeStats bool) {
+	bl.configuration.IncludeStats = IncludeStats
+}
+
 func (bl *FairnessTrackerBuilder) SetRotationFrequency(rotationFrequency time.Duration) {
 	bl.configuration.RotationFrequency = rotationFrequency
 }

@@ -30,12 +30,12 @@ type FairnessTracker struct {
 
 // Allows passing an external ticket for simulations
 func NewFairnessTrackerWithTicker(trackerConfig *config.FairnessTrackerConfig, tikr utils.ITicker) (*FairnessTracker, error) {
-	st1, err := data.NewStructure(trackerConfig, 1)
+	st1, err := data.NewStructure(trackerConfig, 1, trackerConfig.IncludeStats)
 	if err != nil {
 		return nil, NewFairnessTrackerError(err, "Failed to create a structure")
 	}
 
-	st2, err := data.NewStructure(trackerConfig, 2)
+	st2, err := data.NewStructure(trackerConfig, 2, trackerConfig.IncludeStats)
 	if err != nil {
 		return nil, NewFairnessTrackerError(err, "Failed to create a structure")
 	}
@@ -63,13 +63,12 @@ func NewFairnessTrackerWithTicker(trackerConfig *config.FairnessTrackerConfig, t
 			case <-stopRotation:
 				return
 			case <-tikr.C():
-				s, err := data.NewStructure(trackerConfig, ft.structureIdCtr)
-				ft.structureIdCtr++
-
+				s, err := data.NewStructure(trackerConfig, ft.structureIdCtr, trackerConfig.IncludeStats)
 				if err != nil {
 					// TODO: While this should never happen, think if we want to handle this more gracefully
 					log.Fatalf("Failed to create a structure during rotation")
 				}
+				ft.structureIdCtr++
 
 				ft.rotationLock.Lock()
 				ft.mainStructure = ft.secondaryStructure

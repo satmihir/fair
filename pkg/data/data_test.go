@@ -73,7 +73,7 @@ func TestNewStructureFailsValidation(t *testing.T) {
 		Pd: .15,
 		Pi: .1,
 	}
-	_, err := NewStructure(conf, 1)
+	_, err := NewStructure(conf, 1, true)
 	assert.Error(t, err)
 }
 
@@ -84,7 +84,7 @@ func TestNewStructure(t *testing.T) {
 		Pd: .1,
 		Pi: .15,
 	}
-	structure, err := NewStructure(conf, 1)
+	structure, err := NewStructure(conf, 1, true)
 	assert.NoError(t, err)
 	assert.NotNil(t, structure)
 
@@ -112,7 +112,7 @@ func TestGetId(t *testing.T) {
 		Pd: .1,
 		Pi: .15,
 	}
-	structure, err := NewStructure(conf, 1)
+	structure, err := NewStructure(conf, 1, true)
 	assert.NoError(t, err)
 	assert.NotNil(t, structure)
 
@@ -126,7 +126,7 @@ func TestEndToEnd(t *testing.T) {
 		Pd: .1,
 		Pi: .15,
 	}
-	structure, err := NewStructure(conf, 1)
+	structure, err := NewStructure(conf, 1, true)
 	assert.NoError(t, err)
 	assert.NotNil(t, structure)
 

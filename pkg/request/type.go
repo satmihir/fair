@@ -21,6 +21,18 @@ const (
 type RegisterRequestResult struct {
 	// If true, this request should be throttled
 	ShouldThrottle bool
+	// Probabilities and other useful debugging information
+	ResultStats *ResultStats
+}
+
+// Probabilities and other useful debugging information from registering a request
+type ResultStats struct {
+	// The final probability used to make the throttling decision
+	FinalProbability float64
+	// The chosen bucket index at every level
+	BucketIndexes []int
+	// The probabilities of the chosen buckets
+	BucketProbabilities []float64
 }
 
 // The response object of the ReportOutcome function
