@@ -39,7 +39,7 @@ import "github.com/satmihir/fair"
 To use the default config which should work well is most cases:
 
 ```go
-trkB := NewFairnessTrackerBuilder()
+trkB := tracker.NewFairnessTrackerBuilder()
 
 trk, err := trkB.BuildWithDefaultConfig()
 defer trk.Close()
@@ -48,7 +48,7 @@ defer trk.Close()
 If you want to make some changes to the config, you can use the setters on the builder:
 
 ```go
-trkB := NewFairnessTrackerBuilder()
+trkB := tracker.NewFairnessTrackerBuilder()
 // Rotate the underlying hashes every one minute to avoid correlated false positives
 trkB.SetRotationFrequency(1 * time.Minute)
 
@@ -95,7 +95,7 @@ You can use the `GenerateTunedStructureConfig` to tune the tracker without direc
 
 ```go
 conf := config.GenerateTunedStructureConfig(1000, 1000, 25)
-trkB := NewFairnessTrackerBuilder()
+trkB := tracker.NewFairnessTrackerBuilder()
 
 trk, err := trkB.BuildWithConfig(config)
 defer trk.Close()
