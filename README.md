@@ -28,12 +28,6 @@ To install the FAIR library, use `go get`:
 go get github.com/satmihir/fair
 ```
 
-Then, import it into your Go code:
-
-```go
-import "github.com/satmihir/fair"
-```
-
 ## Usage
 
 To use the default config which should work well is most cases:
