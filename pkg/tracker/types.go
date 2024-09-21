@@ -58,6 +58,10 @@ func (bl *FairnessTrackerBuilder) SetRotationFrequency(rotationFrequency time.Du
 	bl.configuration.RotationFrequency = rotationFrequency
 }
 
+func (bl *FairnessTrackerBuilder) SetFinalProbabilityFunction(finalProbabilityFunction config.FinalProbabilityFunction) {
+	bl.configuration.FinalProbabilityFunction = finalProbabilityFunction
+}
+
 // The public facing errors from the FairnessTracker
 type FairnessTrackerError struct {
 	*utils.BaseError

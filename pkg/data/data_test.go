@@ -121,10 +121,12 @@ func TestGetId(t *testing.T) {
 
 func TestEndToEnd(t *testing.T) {
 	conf := &config.FairnessTrackerConfig{
-		L:  2,
-		M:  24,
-		Pd: .1,
-		Pi: .15,
+		L:                        2,
+		M:                        24,
+		Pd:                       .1,
+		Pi:                       .15,
+		Lambda:                   0,
+		FinalProbabilityFunction: config.MeanFinalProbabilityFunction,
 	}
 	structure, err := NewStructure(conf, 1, true)
 	assert.NoError(t, err)

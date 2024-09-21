@@ -18,4 +18,6 @@ type FairnessTrackerConfig struct {
 	RotationFrequency time.Duration
 	// Include result stats. Useful for debugging but may slightly affect performance.
 	IncludeStats bool
+	// The function to choose the final probability from all the bucket probabilities
+	FinalProbabilityFunction FinalProbabilityFunction
 }

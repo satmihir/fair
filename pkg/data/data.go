@@ -89,33 +89,32 @@ func (s *Structure) Close() {
 func (s *Structure) RegisterRequest(ctx context.Context, clientIdentifier []byte) (*request.RegisterRequestResult, error) {
 	var stats *request.ResultStats
 
-	var pmin float64 = 1
+	bucketProbabilities := make([]float64, s.config.L)
 
 	// We can ignore the error since the handler never returns one
 	s.visitBuckets(clientIdentifier, func(l uint32, m uint32, b *bucket) error {
-		if b.probability < pmin {
-			pmin = b.probability
-		}
-
+		bucketProbabilities[l] = b.probability
 		if s.includeStats {
 			if stats == nil {
 				stats = &request.ResultStats{
-					BucketIndexes:       make([]int, s.config.L),
-					BucketProbabilities: make([]float64, s.config.L),
+					BucketIndexes: make([]int, s.config.L),
 				}
 			}
-
 			stats.BucketIndexes[l] = int(m)
-			stats.BucketProbabilities[l] = b.probability
-			stats.FinalProbability = pmin
 		}
-
 		return nil
 	})
 
+	pfinal := s.config.FinalProbabilityFunction(bucketProbabilities)
+
+	if s.includeStats {
+		stats.BucketProbabilities = bucketProbabilities
+		stats.FinalProbability = pfinal
+	}
+
 	// Decide whether to throttle the request based on the probability
 	shouldThrottle := false
-	if rand.Float64() <= pmin {
+	if rand.Float64() <= pfinal {
 		shouldThrottle = true
 	}
 

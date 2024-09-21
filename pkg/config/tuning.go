@@ -1,6 +1,7 @@
 package config
 
 import (
+	"log"
 	"math"
 	"time"
 )
@@ -25,6 +26,37 @@ const (
 	minL = 3
 	// The default rotation duration
 	defaultRotationDuration = time.Minute * 5
+)
+
+// The function to choose the final probability based on all bucket probabilities
+type FinalProbabilityFunction func([]float64) float64
+
+var (
+	MinFinalProbabilityFunction FinalProbabilityFunction = func(buckets []float64) float64 {
+		if len(buckets) == 0 {
+			log.Fatalf("Cannot compute final probability with empty buckets slice")
+		}
+
+		var min float64 = 1.
+		for _, b := range buckets {
+			min = math.Min(min, b)
+		}
+
+		return min
+	}
+
+	MeanFinalProbabilityFunction FinalProbabilityFunction = func(buckets []float64) float64 {
+		if len(buckets) == 0 {
+			log.Fatalf("Cannot compute final probability with empty buckets slice")
+		}
+
+		var total float64
+		for _, b := range buckets {
+			total += b
+		}
+
+		return total / float64(len(buckets))
+	}
 )
 
 // The default config that's supposed to work in most cases
@@ -58,12 +90,14 @@ func GenerateTunedStructureConfig(expectedClientFlows, bucketsPerLevel, tolerabl
 	Pd := pdSlowingFactor * Pi
 
 	return &FairnessTrackerConfig{
-		M:                 bucketsPerLevel,
-		L:                 L,
-		Pi:                Pi,
-		Pd:                Pd,
-		Lambda:            defaultDecayRate,
-		RotationFrequency: defaultRotationDuration,
+		M:                        bucketsPerLevel,
+		L:                        L,
+		Pi:                       Pi,
+		Pd:                       Pd,
+		Lambda:                   defaultDecayRate,
+		RotationFrequency:        defaultRotationDuration,
+		IncludeStats:             false,
+		FinalProbabilityFunction: MinFinalProbabilityFunction,
 	}
 }
 

@@ -26,6 +26,7 @@ func TestBuildFairnessTracker(t *testing.T) {
 	b.SetLambda(.001)
 	b.SetRotationFrequency(1 * time.Second)
 	b.SetIncludeStats(true)
+	b.SetFinalProbabilityFunction(config.MeanFinalProbabilityFunction)
 
 	tr, err := b.Build()
 	assert.NoError(t, err)
