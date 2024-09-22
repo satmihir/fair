@@ -29,13 +29,13 @@ type FairnessTracker struct {
 }
 
 // Allows passing an external ticket for simulations
-func NewFairnessTrackerWithTicker(trackerConfig *config.FairnessTrackerConfig, tikr utils.ITicker) (*FairnessTracker, error) {
-	st1, err := data.NewStructure(trackerConfig, 1, trackerConfig.IncludeStats)
+func NewFairnessTrackerWithClockAndTicker(trackerConfig *config.FairnessTrackerConfig, clock utils.IClock, tikr utils.ITicker) (*FairnessTracker, error) {
+	st1, err := data.NewStructureWithClock(trackerConfig, 1, trackerConfig.IncludeStats, clock)
 	if err != nil {
 		return nil, NewFairnessTrackerError(err, "Failed to create a structure")
 	}
 
-	st2, err := data.NewStructure(trackerConfig, 2, trackerConfig.IncludeStats)
+	st2, err := data.NewStructureWithClock(trackerConfig, 2, trackerConfig.IncludeStats, clock)
 	if err != nil {
 		return nil, NewFairnessTrackerError(err, "Failed to create a structure")
 	}
@@ -63,7 +63,7 @@ func NewFairnessTrackerWithTicker(trackerConfig *config.FairnessTrackerConfig, t
 			case <-stopRotation:
 				return
 			case <-tikr.C():
-				s, err := data.NewStructure(trackerConfig, ft.structureIdCtr, trackerConfig.IncludeStats)
+				s, err := data.NewStructureWithClock(trackerConfig, ft.structureIdCtr, trackerConfig.IncludeStats, clock)
 				if err != nil {
 					// TODO: While this should never happen, think if we want to handle this more gracefully
 					log.Fatalf("Failed to create a structure during rotation")
@@ -82,8 +82,9 @@ func NewFairnessTrackerWithTicker(trackerConfig *config.FairnessTrackerConfig, t
 }
 
 func NewFairnessTracker(trackerConfig *config.FairnessTrackerConfig) (*FairnessTracker, error) {
+	clk := utils.NewRealClock()
 	tikr := utils.NewRealTicker(trackerConfig.RotationFrequency)
-	return NewFairnessTrackerWithTicker(trackerConfig, tikr)
+	return NewFairnessTrackerWithClockAndTicker(trackerConfig, clk, tikr)
 }
 
 func (ft *FairnessTracker) RegisterRequest(ctx context.Context, clientIdentifier []byte) (*request.RegisterRequestResult, error) {
