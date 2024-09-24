@@ -140,6 +140,7 @@ func (s *Structure) ReportOutcome(ctx context.Context, clientIdentifier []byte, 
 		// If the probability is going up, we will try to save it by spending a grace token
 		if adjustment > 0 && b.graceTokens > 0 {
 			b.graceTokens--
+			b.lastUpdatedTimeMillis = s.currentMillis()
 			return nil
 		}
 
