@@ -17,17 +17,23 @@ import (
 type bucket struct {
 	// Probability that a request falling on this bucket should be dropped
 	probability float64
+	// The gace tokens in this bucket that'll save from increasing the probability
+	graceTokens uint32
+	// The max gace tokens
+	graceTokenLimit uint32
 	// Time in millis since the bucket was last updated
 	lastUpdatedTimeMillis uint64
 	// A mutex to protect the state of this bucket from concurrent access
 	lock *sync.Mutex
 }
 
-func NewBucket(clock utils.IClock) *bucket {
+func NewBucket(clock utils.IClock, graceTokens uint32) *bucket {
 	return &bucket{
 		probability:           0,
 		lastUpdatedTimeMillis: uint64(clock.Now().UnixMilli()),
 		lock:                  &sync.Mutex{},
+		graceTokens:           graceTokens,
+		graceTokenLimit:       graceTokens,
 	}
 }
 
@@ -61,7 +67,7 @@ func NewStructureWithClock(config *config.FairnessTrackerConfig, id uint64, incl
 		levels[i] = make([]*bucket, config.M)
 
 		for j := 0; j < int(config.M); j++ {
-			levels[i][j] = NewBucket(clock)
+			levels[i][j] = NewBucket(clock, config.GraceTokenLimit)
 		}
 	}
 
@@ -131,6 +137,12 @@ func (s *Structure) ReportOutcome(ctx context.Context, clientIdentifier []byte, 
 	}
 
 	err := s.visitBuckets(clientIdentifier, func(l uint32, m uint32, b *bucket) error {
+		// If the probability is going up, we will try to save it by spending a grace token
+		if adjustment > 0 && b.graceTokens > 0 {
+			b.graceTokens--
+			return nil
+		}
+
 		p := b.probability + adjustment
 		if p < 0 {
 			p = 0
@@ -142,6 +154,11 @@ func (s *Structure) ReportOutcome(ctx context.Context, clientIdentifier []byte, 
 
 		b.probability = p
 		b.lastUpdatedTimeMillis = s.currentMillis()
+
+		// If the probability is going down to 0 (or staying to 0), we will earn a grace token
+		if p == 0 {
+			b.graceTokens = min(b.graceTokenLimit, b.graceTokens+1)
+		}
 
 		return nil
 	})

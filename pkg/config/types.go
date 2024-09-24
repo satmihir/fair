@@ -12,6 +12,8 @@ type FairnessTrackerConfig struct {
 	Pi float64
 	// The delta P to subtract from a bucket's probability when there's a success
 	Pd float64
+	// Maximum grace tokens a bucket can accumulate
+	GraceTokenLimit uint32
 	// The exponential decay rate for the probabilities
 	Lambda float64
 	// The frequency of rotation
