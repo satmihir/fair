@@ -17,7 +17,7 @@ func TestGenerateTunedStructureConfig(t *testing.T) {
 	assert.Equal(t, int(conf.L), 3)
 	assert.Equal(t, int(conf.M), 1000)
 	assert.Equal(t, conf.Pi*25, float64(1))
-	assert.Equal(t, conf.Pd*25*10, float64(1))
+	assert.Equal(t, conf.Pd*25*1000, float64(1))
 }
 
 func TestDefaultStructureConfig(t *testing.T) {
@@ -25,5 +25,5 @@ func TestDefaultStructureConfig(t *testing.T) {
 	assert.Equal(t, int(conf.L), 3)
 	assert.Equal(t, int(conf.M), 1000)
 	assert.Equal(t, conf.Pi*25, float64(1))
-	assert.Equal(t, conf.Pd*25*10, float64(1))
+	assert.Equal(t, conf.Pd*25*1000, float64(1))
 }

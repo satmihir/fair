@@ -40,7 +40,7 @@ func TestEndToEnd(t *testing.T) {
 	assert.True(t, resp.ShouldThrottle)
 
 	// It takes 10x more failures to get back to 0 probability
-	for i := 0; i < 300; i++ {
+	for i := 0; i < 30000; i++ {
 		_, err = trk.ReportOutcome(ctx, id, request.OutcomeSuccess)
 		assert.NoError(t, err)
 	}
