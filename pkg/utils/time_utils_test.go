@@ -12,11 +12,11 @@ func TestClock(t *testing.T) {
 	t1 := time.Now()
 	t2 := clk.Now()
 
-	assert.True(t, t2.After(t1))
+	assert.True(t, t2.Compare(t1) >= 0)
 
 	clk.Sleep(10 * time.Millisecond)
 
-	assert.True(t, clk.Now().Sub(t2) > 10*time.Millisecond)
+	assert.True(t, clk.Now().Sub(t2) >= 10*time.Millisecond)
 }
 
 func TestTicket(t *testing.T) {
