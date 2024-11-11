@@ -83,10 +83,12 @@ func TestIntegration(t *testing.T) {
 
 				if err := tb.Take(); err != nil {
 					fourTwentyNine.Add(1)
-					trk.ReportOutcome(ctx, []byte(client), request.OutcomeFailure)
+					_, err = trk.ReportOutcome(ctx, []byte(client), request.OutcomeFailure)
+					assert.NoError(t, err)
 				} else {
 					twoHundred.Add(1)
-					trk.ReportOutcome(ctx, []byte(client), request.OutcomeSuccess)
+					_, err = trk.ReportOutcome(ctx, []byte(client), request.OutcomeSuccess)
+					assert.NoError(t, err)
 				}
 
 				time.Sleep(25 * time.Millisecond)

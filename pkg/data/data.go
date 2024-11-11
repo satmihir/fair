@@ -92,7 +92,7 @@ func (s *Structure) RegisterRequest(ctx context.Context, clientIdentifier []byte
 	bucketProbabilities := make([]float64, s.config.L)
 
 	// We can ignore the error since the handler never returns one
-	s.visitBuckets(clientIdentifier, func(l uint32, m uint32, b *bucket) error {
+	_ = s.visitBuckets(clientIdentifier, func(l uint32, m uint32, b *bucket) error {
 		bucketProbabilities[l] = b.probability
 		if s.includeStats {
 			if stats == nil {
