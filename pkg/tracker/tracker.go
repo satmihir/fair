@@ -24,7 +24,10 @@ type FairnessTracker struct {
 
 	tikr utils.ITicker
 
-	rotationLock *sync.Mutex
+	// Rotation lock to ensure that we don't rotate while updating the structures
+	// The act of updating is a "read" in this case since multiple updates can happen
+	// concurrently but none can happend while we are rotating so that's a write.
+	rotationLock *sync.RWMutex
 	stopRotation chan bool
 }
 
@@ -50,7 +53,7 @@ func NewFairnessTrackerWithClockAndTicker(trackerConfig *config.FairnessTrackerC
 
 		tikr: tikr,
 
-		rotationLock: &sync.Mutex{},
+		rotationLock: &sync.RWMutex{},
 		stopRotation: stopRotation,
 	}
 
@@ -89,8 +92,8 @@ func NewFairnessTracker(trackerConfig *config.FairnessTrackerConfig) (*FairnessT
 
 func (ft *FairnessTracker) RegisterRequest(ctx context.Context, clientIdentifier []byte) (*request.RegisterRequestResult, error) {
 	// We must take the rotation lock to avoid rotation while updating the structures
-	ft.rotationLock.Lock()
-	defer ft.rotationLock.Unlock()
+	ft.rotationLock.RLock()
+	defer ft.rotationLock.RUnlock()
 
 	resp, err := ft.mainStructure.RegisterRequest(ctx, clientIdentifier)
 	if err != nil {
@@ -108,8 +111,8 @@ func (ft *FairnessTracker) RegisterRequest(ctx context.Context, clientIdentifier
 
 func (ft *FairnessTracker) ReportOutcome(ctx context.Context, clientIdentifier []byte, outcome request.Outcome) (*request.ReportOutcomeResult, error) {
 	// We must take the rotation lock to avoid rotation while updating the structures
-	ft.rotationLock.Lock()
-	defer ft.rotationLock.Unlock()
+	ft.rotationLock.RLock()
+	defer ft.rotationLock.RUnlock()
 
 	resp, err := ft.mainStructure.ReportOutcome(ctx, clientIdentifier, outcome)
 	if err != nil {
