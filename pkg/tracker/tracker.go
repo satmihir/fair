@@ -26,7 +26,7 @@ type FairnessTracker struct {
 
 	// Rotation lock to ensure that we don't rotate while updating the structures
 	// The act of updating is a "read" in this case since multiple updates can happen
-	// concurrently but none can happend while we are rotating so that's a write.
+	// concurrently but none can happen while we are rotating so that's a write.
 	rotationLock *sync.RWMutex
 	stopRotation chan bool
 }
