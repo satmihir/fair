@@ -8,6 +8,8 @@ import (
 )
 
 func TestError(t *testing.T, expectedType interface{}, errInstance error, expectedMessage string, wrappedErr error) {
+	t.Helper()
+
 	_, ok := errInstance.(interface{ Unwrap() error })
 
 	assert.True(t, ok, "Error should be of expected type")
