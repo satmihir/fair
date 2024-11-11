@@ -26,7 +26,7 @@ func TestTicker(t *testing.T) {
 	select {
 	case <-ticker.C():
 		found = true
-		break
+	case <-time.After(100 * time.Millisecond):
 	}
 
 	assert.True(t, found)
