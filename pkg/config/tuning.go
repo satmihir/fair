@@ -85,7 +85,7 @@ func GenerateTunedStructureConfig(expectedClientFlows, bucketsPerLevel, tolerabl
 	}
 
 	// The probability to add per bad outcome so we fully block a flow after tolerable failures
-	var Pi float64 = 1 / float64(tolerableBadRequestsPerBadFlow)
+	Pi := 1 / float64(tolerableBadRequestsPerBadFlow)
 	// We want a slower recovery than the speed of marking workloads as bad
 	Pd := pdSlowingFactor * Pi
 

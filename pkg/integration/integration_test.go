@@ -41,7 +41,7 @@ func (tb *TokenBucket) Take() error {
 	tb.tokens += tb.tokensPerSecond * float64(diff)
 
 	if tb.tokens >= 1 {
-		tb.tokens -= 1
+		tb.tokens--
 		return nil
 	}
 
