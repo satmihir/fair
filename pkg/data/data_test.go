@@ -4,9 +4,10 @@ import (
 	"context"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/satmihir/fair/pkg/config"
 	"github.com/satmihir/fair/pkg/request"
-	"github.com/stretchr/testify/assert"
 )
 
 func TestValidateStructConfig(t *testing.T) {

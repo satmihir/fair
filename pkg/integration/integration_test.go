@@ -8,9 +8,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/satmihir/fair/pkg/request"
 	"github.com/satmihir/fair/pkg/tracker"
-	"github.com/stretchr/testify/assert"
 )
 
 var errNoTokens = fmt.Errorf("no tokens left")

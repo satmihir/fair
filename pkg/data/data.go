@@ -7,10 +7,11 @@ import (
 	"math/rand"
 	"sync"
 
+	"github.com/spaolacci/murmur3"
+
 	"github.com/satmihir/fair/pkg/config"
 	"github.com/satmihir/fair/pkg/request"
 	"github.com/satmihir/fair/pkg/utils"
-	"github.com/spaolacci/murmur3"
 )
 
 // Represents a bucket in the leveled structure
