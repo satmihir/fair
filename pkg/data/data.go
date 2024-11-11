@@ -87,7 +87,7 @@ func (s *Structure) GetID() uint64 {
 func (s *Structure) Close() {
 }
 
-func (s *Structure) RegisterRequest(ctx context.Context, clientIdentifier []byte) (*request.RegisterRequestResult, error) {
+func (s *Structure) RegisterRequest(_ context.Context, clientIdentifier []byte) (*request.RegisterRequestResult, error) {
 	var stats *request.ResultStats
 
 	bucketProbabilities := make([]float64, s.config.L)
@@ -125,13 +125,13 @@ func (s *Structure) RegisterRequest(ctx context.Context, clientIdentifier []byte
 	}, nil
 }
 
-func (s *Structure) ReportOutcome(ctx context.Context, clientIdentifier []byte, outcome request.Outcome) (*request.ReportOutcomeResult, error) {
+func (s *Structure) ReportOutcome(_ context.Context, clientIdentifier []byte, outcome request.Outcome) (*request.ReportOutcomeResult, error) {
 	adjustment := s.config.Pi
 	if outcome == request.OutcomeSuccess {
 		adjustment = -1 * s.config.Pd
 	}
 
-	err := s.visitBuckets(clientIdentifier, func(l uint32, m uint32, b *bucket) error {
+	err := s.visitBuckets(clientIdentifier, func(_ uint32, _ uint32, b *bucket) error {
 		p := b.probability + adjustment
 		if p < 0 {
 			p = 0
