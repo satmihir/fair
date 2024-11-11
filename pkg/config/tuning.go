@@ -22,7 +22,7 @@ const (
 	lowProbability = 0.0001
 	// The slowing factor from Pi to Pd (10x successes to get a flow fully exonerated)
 	pdSlowingFactor = 0.001
-	// The minimum number og levels to use despite what the calculation says
+	// The minimum number of levels to use despite what the calculation says
 	minL = 3
 	// The default rotation duration
 	defaultRotationDuration = time.Minute * 5

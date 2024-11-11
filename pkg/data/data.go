@@ -105,16 +105,16 @@ func (s *Structure) RegisterRequest(ctx context.Context, clientIdentifier []byte
 		return nil
 	})
 
-	pfinal := s.config.FinalProbabilityFunction(bucketProbabilities)
+	pFinal := s.config.FinalProbabilityFunction(bucketProbabilities)
 
 	if s.includeStats {
 		stats.BucketProbabilities = bucketProbabilities
-		stats.FinalProbability = pfinal
+		stats.FinalProbability = pFinal
 	}
 
 	// Decide whether to throttle the request based on the probability
 	shouldThrottle := false
-	if rand.Float64() <= pfinal {
+	if rand.Float64() <= pFinal {
 		shouldThrottle = true
 	}
 
@@ -207,7 +207,7 @@ func validateStructureConfig(config *config.FairnessTrackerConfig) error {
 }
 
 // Calculate n hashes of the given input using murmur hash.
-// To optimize, we only calculate a single 64 bit hash and use a technique outlined in
+// To optimize, we only calculate a single 64-bit hash and use a technique outlined in
 // the paper below to compute more based on them:
 // https://www.eecs.harvard.edu/~michaelm/postscripts/rsa2008.pdf
 func generateNHashesUsing64Bit(input []byte, n uint32, seed uint32) []uint32 {
