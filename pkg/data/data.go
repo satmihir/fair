@@ -24,7 +24,7 @@ type bucket struct {
 	lock *sync.Mutex
 }
 
-func NewBucket(clock utils.IClock) *bucket {
+func newBucket(clock utils.IClock) *bucket {
 	return &bucket{
 		probability:           0,
 		lastUpdatedTimeMillis: uint64(clock.Now().UnixMilli()),
@@ -62,7 +62,7 @@ func NewStructureWithClock(config *config.FairnessTrackerConfig, id uint64, incl
 		levels[i] = make([]*bucket, config.M)
 
 		for j := 0; j < int(config.M); j++ {
-			levels[i][j] = NewBucket(clock)
+			levels[i][j] = newBucket(clock)
 		}
 	}
 
