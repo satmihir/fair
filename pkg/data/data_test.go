@@ -105,7 +105,7 @@ func TestHashes(t *testing.T) {
 	assert.Equal(t, hashes[2], hashes2[2])
 }
 
-func TestGetId(t *testing.T) {
+func TestGetID(t *testing.T) {
 	conf := &config.FairnessTrackerConfig{
 		L:  2,
 		M:  24,
@@ -116,7 +116,7 @@ func TestGetId(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NotNil(t, structure)
 
-	assert.Equal(t, int(structure.GetId()), 1)
+	assert.Equal(t, int(structure.GetID()), 1)
 }
 
 func TestEndToEnd(t *testing.T) {
@@ -132,7 +132,7 @@ func TestEndToEnd(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NotNil(t, structure)
 
-	assert.Equal(t, int(structure.GetId()), 1)
+	assert.Equal(t, int(structure.GetID()), 1)
 
 	ctx := context.Background()
 	id := []byte("hello_world")

@@ -53,9 +53,9 @@ func TestRotation(t *testing.T) {
 	assert.NoError(t, err)
 
 	for i := 0; i < 3; i++ {
-		assert.Equal(t, int(trk.secondaryStructure.GetId()-trk.mainStructure.GetId()), 1)
+		assert.Equal(t, int(trk.secondaryStructure.GetID()-trk.mainStructure.GetID()), 1)
 		time.Sleep(1 * time.Second)
 	}
 
-	assert.True(t, trk.secondaryStructure.GetId() >= 2)
+	assert.True(t, trk.secondaryStructure.GetID() >= 2)
 }

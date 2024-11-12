@@ -41,7 +41,7 @@ type ReportOutcomeResult struct{}
 // The data struecture interface
 type Tracker interface {
 	// Return the int ID of this structure. Used for implementing moving hashes.
-	GetId() uint64
+	GetID() uint64
 
 	// Register an incoming request from a client identified by a clientIdentifier
 	// The clientIdentifier needs to be unique and consistent for every client as

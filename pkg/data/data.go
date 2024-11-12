@@ -79,7 +79,7 @@ func NewStructure(config *config.FairnessTrackerConfig, id uint64, includeStats 
 	return NewStructureWithClock(config, id, includeStats, utils.NewRealClock())
 }
 
-func (s *Structure) GetId() uint64 {
+func (s *Structure) GetID() uint64 {
 	return s.id
 }
 
