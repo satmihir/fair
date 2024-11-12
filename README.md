@@ -10,7 +10,7 @@ FAIR is a Go library designed to ensure fairness in the resource-constrained env
 
 ## Introduction
 
-The core algorithm of FAIR is based on the [Stochastic Fair BLUE](https://rtcl.eecs.umich.edu/rtclweb/assets/publications/2001/feng2001fair.pdf) often used for network congestion control with a few modifications. The philosophy of FAIR is to only throttle when there's a genuine shortage of resources as opposed to the approaches like token bucket or leaky bucket which may reject requests even when the resource is still available (a creative configuration of FAIR can enable that type of behavior but we don't encourage it). Since the state is stored in a multi-level [Bloom Filter](https://medium.com/p/e25942ab6093) style data structure, the memory needed is constant and does not scale with the number of clients. When properly configured, FAIR can scale to a very large number of clients with a low probability of false positives and a near zero probability of persistent false positives thanks to the hash rotation mechanism that regularly rehashes clients to avoid any correlated behavior longer than a few minutes.
+The core algorithm of FAIR is based on the [Stochastic Fair BLUE](https://rtcl.eecs.umich.edu/rtclweb/assets/publications/2001/feng2001fair.pdf) often used for network congestion control with a few modifications. The philosophy of FAIR is to only throttle when there's a genuine shortage of resources as opposed to the approaches like token bucket or leaky bucket which may reject requests even when the resource is still available (a creative configuration of FAIR can enable that type of behavior, but we don't encourage it). Since the state is stored in a multi-level [Bloom Filter](https://medium.com/p/e25942ab6093) style data structure, the memory needed is constant and does not scale with the number of clients. When properly configured, FAIR can scale to a very large number of clients with a low probability of false positives and a near zero probability of persistent false-positives. The hash rotation mechanism regularly rehashes clients to avoid any correlated behavior longer than a few minutes.
 
 ### Key Features
 
@@ -23,7 +23,7 @@ The core algorithm of FAIR is based on the [Stochastic Fair BLUE](https://rtcl.e
 
 ![Evaluation](eval.png)
 
-In this example, 20 clients are competing for a resource that regenerates at the rate of 20/s (every data point in the graph is 5s apart). 18 out of 20 clients are "well behaved" because they request a resource every second while the remaining two clients try to get a resource every 100ms which is an "unfair" rate. On the left, we see that when left unthrottled, the two unfair clients grab a disproportionately large amount of resource while the regular workloads starve and get a lot less than 1/s rate. On the right, when throttled with fair, the regular workloads stay virtually unaffected while the unfair ones get throttled. On average, even the unfair workloads get their fair share when seen over larger time periods.
+In this example, 20 clients are competing for a resource that regenerates at the rate of 20/s (every data point in the graph is 5s apart). 18 out of 20 clients are "well-behaved" because they request a resource every second while the remaining two clients try to get a resource every 100ms which is an "unfair" rate. On the left, we see that when left unthrottled, the two unfair clients grab a disproportionately large amount of resource while the regular workloads starve and get a lot less than 1/s rate. On the right, when throttled with fair, the regular workloads stay virtually unaffected while the unfair ones get throttled. On average, even the unfair workloads get their fair share when seen over larger time periods.
 
 ## Installation
 
@@ -55,7 +55,7 @@ trk, err := trkB.Build()
 defer trk.Close()
 ```
 
-For every incoming request, you have to pass the flow identifier (the id over which you want to maintain fairness) into the tracker to see if it needs to be throttled. A client ID for example could be such ID to maintain resource fairness among all your clients.
+For every incoming request, you have to pass the flow identifier (the identifier over which you want to maintain fairness) into the tracker to see if it needs to be throttled. A client ID for example could be such ID to maintain resource fairness among all your clients.
 
 ```go
 ctx := context.Background()
@@ -90,7 +90,7 @@ trk.ReportOutcome(ctx, id, request.OutcomeSuccess)
 You can use the `GenerateTunedStructureConfig` to tune the tracker without directly touching the algorithm parameters. It exposes a simple interface where you have to pass the following things based on your application logic and scaling requirements.
 - `expectedClientFlows` - Number of concurrent clients you expect to your app
 - `bucketsPerLevel` - Number of buckets per level in the core structure
-- `tolerableBadRequestsPerBadFlow` - Number of requests we can tolerate before we fully shut down a flow
+- `tolerableBadRequestsPerBadFlow` - Number of requests we can tolerate before we fully shut down a flow.
 
 ```go
 conf := config.GenerateTunedStructureConfig(1000, 1000, 25)

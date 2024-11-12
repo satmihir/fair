@@ -22,17 +22,17 @@ type FairnessTracker struct {
 	mainStructure      request.Tracker
 	secondaryStructure request.Tracker
 
-	tikr utils.ITicker
+	ticker utils.ITicker
 
 	// Rotation lock to ensure that we don't rotate while updating the structures
 	// The act of updating is a "read" in this case since multiple updates can happen
-	// concurrently but none can happen while we are rotating so that's a write.
+	// concurrently, but none can happen while we are rotating so that's a write.
 	rotationLock *sync.RWMutex
 	stopRotation chan bool
 }
 
 // Allows passing an external ticket for simulations
-func NewFairnessTrackerWithClockAndTicker(trackerConfig *config.FairnessTrackerConfig, clock utils.IClock, tikr utils.ITicker) (*FairnessTracker, error) {
+func NewFairnessTrackerWithClockAndTicker(trackerConfig *config.FairnessTrackerConfig, clock utils.IClock, ticker utils.ITicker) (*FairnessTracker, error) {
 	st1, err := data.NewStructureWithClock(trackerConfig, 1, trackerConfig.IncludeStats, clock)
 	if err != nil {
 		return nil, NewFairnessTrackerError(err, "Failed to create a structure")
@@ -51,7 +51,7 @@ func NewFairnessTrackerWithClockAndTicker(trackerConfig *config.FairnessTrackerC
 		mainStructure:      st1,
 		secondaryStructure: st2,
 
-		tikr: tikr,
+		ticker: ticker,
 
 		rotationLock: &sync.RWMutex{},
 		stopRotation: stopRotation,
@@ -65,7 +65,7 @@ func NewFairnessTrackerWithClockAndTicker(trackerConfig *config.FairnessTrackerC
 			select {
 			case <-stopRotation:
 				return
-			case <-tikr.C():
+			case <-ticker.C():
 				s, err := data.NewStructureWithClock(trackerConfig, ft.structureIdCtr, trackerConfig.IncludeStats, clock)
 				if err != nil {
 					// TODO: While this should never happen, think if we want to handle this more gracefully
@@ -86,8 +86,8 @@ func NewFairnessTrackerWithClockAndTicker(trackerConfig *config.FairnessTrackerC
 
 func NewFairnessTracker(trackerConfig *config.FairnessTrackerConfig) (*FairnessTracker, error) {
 	clk := utils.NewRealClock()
-	tikr := utils.NewRealTicker(trackerConfig.RotationFrequency)
-	return NewFairnessTrackerWithClockAndTicker(trackerConfig, clk, tikr)
+	ticker := utils.NewRealTicker(trackerConfig.RotationFrequency)
+	return NewFairnessTrackerWithClockAndTicker(trackerConfig, clk, ticker)
 }
 
 func (ft *FairnessTracker) RegisterRequest(ctx context.Context, clientIdentifier []byte) (*request.RegisterRequestResult, error) {
@@ -102,7 +102,7 @@ func (ft *FairnessTracker) RegisterRequest(ctx context.Context, clientIdentifier
 
 	// To keep the bad workloads data "warm" in the rotated structure, we will update both
 	if _, err := ft.secondaryStructure.RegisterRequest(ctx, clientIdentifier); err != nil {
-		// TODO: We don't really have to fail here perhaps but I cannot think any reason this will actually fail
+		// TODO: We don't really have to fail here perhaps, but I cannot think any reason this will actually fail
 		return nil, NewFairnessTrackerError(err, "Failed updating the secondary structure")
 	}
 
@@ -129,5 +129,5 @@ func (ft *FairnessTracker) ReportOutcome(ctx context.Context, clientIdentifier [
 
 func (ft *FairnessTracker) Close() {
 	close(ft.stopRotation)
-	ft.tikr.Stop()
+	ft.ticker.Stop()
 }

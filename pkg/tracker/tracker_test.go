@@ -25,7 +25,7 @@ func TestEndToEnd(t *testing.T) {
 	_, err = trk.ReportOutcome(ctx, id, request.OutcomeFailure)
 	assert.NoError(t, err)
 
-	// 24 failures are enough but there's decay so we will add a few more
+	// 24 failures are enough, but there's decay so we will add a few more
 	for i := 0; i < 30; i++ {
 		_, err = trk.ReportOutcome(ctx, id, request.OutcomeFailure)
 		assert.NoError(t, err)

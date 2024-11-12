@@ -19,12 +19,12 @@ func TestClock(t *testing.T) {
 	assert.True(t, clk.Now().Sub(t2) >= 10*time.Millisecond)
 }
 
-func TestTicket(t *testing.T) {
-	var tikr ITicker = NewRealTicker(10 * time.Millisecond)
+func TestTicker(t *testing.T) {
+	var ticker ITicker = NewRealTicker(10 * time.Millisecond)
 	var found bool
 
 	select {
-	case <-tikr.C():
+	case <-ticker.C():
 		found = true
 		break
 	}

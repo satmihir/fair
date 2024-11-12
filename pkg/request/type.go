@@ -38,7 +38,7 @@ type ResultStats struct {
 // The response object of the ReportOutcome function
 type ReportOutcomeResult struct{}
 
-// The data struecture interface
+// The data structure interface
 type Tracker interface {
 	// Return the int ID of this structure. Used for implementing moving hashes.
 	GetID() uint64
@@ -48,11 +48,11 @@ type Tracker interface {
 	// it will be used to hash and locate the corresponding buckets.
 	RegisterRequest(ctx context.Context, clientIdentifier []byte) (*RegisterRequestResult, error)
 
-	// Report the outcome of a requests from the given client so we can update the
+	// Report the outcome of a request from the given client so we can update the
 	// probabilities of the corresponding buckets.
 	// Only report the outcomes on the requests where you could either conclusively
 	// get the resource or not. For outcomes such as user errors or network failures
-	// or timeout with upstream, do NOT report any outcome or we may wrongly throttle
+	// or timeout with upstream, do NOT report any outcome, or we may wrongly throttle
 	// requests based on things not related to resource contention.
 	// You don't have to report an outcome to every registered request.
 	ReportOutcome(ctx context.Context, clientIdentifier []byte, outcome Outcome) (*ReportOutcomeResult, error)
