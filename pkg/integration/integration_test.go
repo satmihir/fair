@@ -8,9 +8,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/satmihir/fair/pkg/request"
 	"github.com/satmihir/fair/pkg/tracker"
-	"github.com/stretchr/testify/assert"
 )
 
 var errNoTokens = fmt.Errorf("no tokens left")
@@ -40,7 +41,7 @@ func (tb *TokenBucket) Take() error {
 	tb.tokens += tb.tokensPerSecond * float64(diff)
 
 	if tb.tokens >= 1 {
-		tb.tokens -= 1
+		tb.tokens--
 		return nil
 	}
 
@@ -83,10 +84,12 @@ func TestIntegration(t *testing.T) {
 
 				if err := tb.Take(); err != nil {
 					fourTwentyNine.Add(1)
-					trk.ReportOutcome(ctx, []byte(client), request.OutcomeFailure)
+					_, err = trk.ReportOutcome(ctx, []byte(client), request.OutcomeFailure)
+					assert.NoError(t, err)
 				} else {
 					twoHundred.Add(1)
-					trk.ReportOutcome(ctx, []byte(client), request.OutcomeSuccess)
+					_, err = trk.ReportOutcome(ctx, []byte(client), request.OutcomeSuccess)
+					assert.NoError(t, err)
 				}
 
 				time.Sleep(25 * time.Millisecond)

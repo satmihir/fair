@@ -7,10 +7,11 @@ import (
 	"math/rand"
 	"sync"
 
+	"github.com/spaolacci/murmur3"
+
 	"github.com/satmihir/fair/pkg/config"
 	"github.com/satmihir/fair/pkg/request"
 	"github.com/satmihir/fair/pkg/utils"
-	"github.com/spaolacci/murmur3"
 )
 
 // Represents a bucket in the leveled structure
@@ -23,7 +24,7 @@ type bucket struct {
 	lock *sync.Mutex
 }
 
-func NewBucket(clock utils.IClock) *bucket {
+func newBucket(clock utils.IClock) *bucket {
 	return &bucket{
 		probability:           0,
 		lastUpdatedTimeMillis: uint64(clock.Now().UnixMilli()),
@@ -61,7 +62,7 @@ func NewStructureWithClock(config *config.FairnessTrackerConfig, id uint64, incl
 		levels[i] = make([]*bucket, config.M)
 
 		for j := 0; j < int(config.M); j++ {
-			levels[i][j] = NewBucket(clock)
+			levels[i][j] = newBucket(clock)
 		}
 	}
 
@@ -86,13 +87,13 @@ func (s *Structure) GetID() uint64 {
 func (s *Structure) Close() {
 }
 
-func (s *Structure) RegisterRequest(ctx context.Context, clientIdentifier []byte) (*request.RegisterRequestResult, error) {
+func (s *Structure) RegisterRequest(_ context.Context, clientIdentifier []byte) (*request.RegisterRequestResult, error) {
 	var stats *request.ResultStats
 
 	bucketProbabilities := make([]float64, s.config.L)
 
 	// We can ignore the error since the handler never returns one
-	s.visitBuckets(clientIdentifier, func(l uint32, m uint32, b *bucket) error {
+	_ = s.visitBuckets(clientIdentifier, func(l uint32, m uint32, b *bucket) error {
 		bucketProbabilities[l] = b.probability
 		if s.includeStats {
 			if stats == nil {
@@ -124,13 +125,13 @@ func (s *Structure) RegisterRequest(ctx context.Context, clientIdentifier []byte
 	}, nil
 }
 
-func (s *Structure) ReportOutcome(ctx context.Context, clientIdentifier []byte, outcome request.Outcome) (*request.ReportOutcomeResult, error) {
+func (s *Structure) ReportOutcome(_ context.Context, clientIdentifier []byte, outcome request.Outcome) (*request.ReportOutcomeResult, error) {
 	adjustment := s.config.Pi
 	if outcome == request.OutcomeSuccess {
 		adjustment = -1 * s.config.Pd
 	}
 
-	err := s.visitBuckets(clientIdentifier, func(l uint32, m uint32, b *bucket) error {
+	err := s.visitBuckets(clientIdentifier, func(_ uint32, _ uint32, b *bucket) error {
 		p := b.probability + adjustment
 		if p < 0 {
 			p = 0

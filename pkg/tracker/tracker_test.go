@@ -5,8 +5,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/satmihir/fair/pkg/request"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/satmihir/fair/pkg/request"
 )
 
 func TestEndToEnd(t *testing.T) {

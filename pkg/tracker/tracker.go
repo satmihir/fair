@@ -17,7 +17,7 @@ type FairnessTracker struct {
 	trackerConfig *config.FairnessTrackerConfig
 
 	// A counter to uniquely identify a structure
-	structureIdCtr uint64
+	structureIDCounter uint64
 
 	mainStructure      request.Tracker
 	secondaryStructure request.Tracker
@@ -45,8 +45,8 @@ func NewFairnessTrackerWithClockAndTicker(trackerConfig *config.FairnessTrackerC
 
 	stopRotation := make(chan bool)
 	ft := &FairnessTracker{
-		trackerConfig:  trackerConfig,
-		structureIdCtr: 3,
+		trackerConfig:      trackerConfig,
+		structureIDCounter: 3,
 
 		mainStructure:      st1,
 		secondaryStructure: st2,
@@ -66,12 +66,12 @@ func NewFairnessTrackerWithClockAndTicker(trackerConfig *config.FairnessTrackerC
 			case <-stopRotation:
 				return
 			case <-ticker.C():
-				s, err := data.NewStructureWithClock(trackerConfig, ft.structureIdCtr, trackerConfig.IncludeStats, clock)
+				s, err := data.NewStructureWithClock(trackerConfig, ft.structureIDCounter, trackerConfig.IncludeStats, clock)
 				if err != nil {
 					// TODO: While this should never happen, think if we want to handle this more gracefully
 					log.Fatalf("Failed to create a structure during rotation")
 				}
-				ft.structureIdCtr++
+				ft.structureIDCounter++
 
 				ft.rotationLock.Lock()
 				ft.mainStructure = ft.secondaryStructure

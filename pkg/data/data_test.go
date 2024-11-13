@@ -4,9 +4,10 @@ import (
 	"context"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/satmihir/fair/pkg/config"
 	"github.com/satmihir/fair/pkg/request"
-	"github.com/stretchr/testify/assert"
 )
 
 func TestValidateStructConfig(t *testing.T) {
@@ -142,7 +143,8 @@ func TestEndToEnd(t *testing.T) {
 	assert.NotNil(t, resp)
 	assert.False(t, resp.ShouldThrottle)
 
-	structure.ReportOutcome(ctx, id, request.OutcomeSuccess)
+	_, err = structure.ReportOutcome(ctx, id, request.OutcomeSuccess)
+	assert.NoError(t, err)
 
 	resp, err = structure.RegisterRequest(ctx, id)
 	assert.NoError(t, err)
@@ -150,7 +152,8 @@ func TestEndToEnd(t *testing.T) {
 	assert.False(t, resp.ShouldThrottle)
 
 	for i := 0; i < 1000; i++ {
-		structure.ReportOutcome(ctx, id, request.OutcomeFailure)
+		_, err = structure.ReportOutcome(ctx, id, request.OutcomeFailure)
+		assert.NoError(t, err)
 	}
 
 	resp, err = structure.RegisterRequest(ctx, id)

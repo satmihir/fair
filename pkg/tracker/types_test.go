@@ -5,9 +5,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/satmihir/fair/pkg/config"
 	"github.com/satmihir/fair/pkg/testutils"
-	"github.com/stretchr/testify/assert"
 )
 
 func TestFairnessTrackerError(t *testing.T) {
