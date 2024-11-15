@@ -27,8 +27,8 @@ type FairnessTracker struct {
 	// Rotation lock to ensure that we don't rotate while updating the structures
 	// The act of updating is a "read" in this case since multiple updates can happen
 	// concurrently, but none can happen while we are rotating so that's a write.
-	rotationLock *sync.RWMutex
-	stopRotation chan bool
+	rotationLock sync.RWMutex
+	stopRotation chan struct{}
 }
 
 // Allows passing an external ticket for simulations
@@ -43,7 +43,7 @@ func NewFairnessTrackerWithClockAndTicker(trackerConfig *config.FairnessTrackerC
 		return nil, NewFairnessTrackerError(err, "Failed to create a structure")
 	}
 
-	stopRotation := make(chan bool)
+	stopRotation := make(chan struct{})
 	ft := &FairnessTracker{
 		trackerConfig:      trackerConfig,
 		structureIDCounter: 3,
@@ -53,7 +53,7 @@ func NewFairnessTrackerWithClockAndTicker(trackerConfig *config.FairnessTrackerC
 
 		ticker: ticker,
 
-		rotationLock: &sync.RWMutex{},
+		rotationLock: sync.RWMutex{},
 		stopRotation: stopRotation,
 	}
 
