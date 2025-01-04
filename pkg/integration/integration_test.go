@@ -75,8 +75,7 @@ func TestIntegration(t *testing.T) {
 			client := fmt.Sprintf("cl-%d", i)
 
 			for j := 0; j < 100; j++ {
-				res, err := trk.RegisterRequest(ctx, []byte(client))
-				assert.NoError(t, err)
+				res := trk.RegisterRequest(ctx, []byte(client))
 
 				if res.ShouldThrottle {
 					throttles.Add(1)
@@ -84,11 +83,10 @@ func TestIntegration(t *testing.T) {
 
 				if err := tb.Take(); err != nil {
 					fourTwentyNine.Add(1)
-					_, err = trk.ReportOutcome(ctx, []byte(client), request.OutcomeFailure)
-					assert.NoError(t, err)
+					trk.ReportOutcome(ctx, []byte(client), request.OutcomeFailure)
 				} else {
 					twoHundred.Add(1)
-					_, err = trk.ReportOutcome(ctx, []byte(client), request.OutcomeSuccess)
+					trk.ReportOutcome(ctx, []byte(client), request.OutcomeSuccess)
 					assert.NoError(t, err)
 				}
 

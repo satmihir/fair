@@ -138,25 +138,22 @@ func TestEndToEnd(t *testing.T) {
 	ctx := context.Background()
 	id := []byte("hello_world")
 
-	resp, err := structure.RegisterRequest(ctx, id)
+	resp := structure.RegisterRequest(ctx, id)
 	assert.NoError(t, err)
 	assert.NotNil(t, resp)
 	assert.False(t, resp.ShouldThrottle)
 
-	_, err = structure.ReportOutcome(ctx, id, request.OutcomeSuccess)
-	assert.NoError(t, err)
+	structure.ReportOutcome(ctx, id, request.OutcomeSuccess)
 
-	resp, err = structure.RegisterRequest(ctx, id)
-	assert.NoError(t, err)
+	resp = structure.RegisterRequest(ctx, id)
 	assert.NotNil(t, resp)
 	assert.False(t, resp.ShouldThrottle)
 
 	for i := 0; i < 1000; i++ {
-		_, err = structure.ReportOutcome(ctx, id, request.OutcomeFailure)
-		assert.NoError(t, err)
+		structure.ReportOutcome(ctx, id, request.OutcomeFailure)
 	}
 
-	resp, err = structure.RegisterRequest(ctx, id)
+	resp = structure.RegisterRequest(ctx, id)
 	assert.NoError(t, err)
 	assert.NotNil(t, resp)
 	assert.True(t, resp.ShouldThrottle)
