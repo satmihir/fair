@@ -87,13 +87,13 @@ func (s *Structure) GetID() uint64 {
 func (s *Structure) Close() {
 }
 
-func (s *Structure) RegisterRequest(_ context.Context, clientIdentifier []byte) (*request.RegisterRequestResult, error) {
+func (s *Structure) RegisterRequest(_ context.Context, clientIdentifier []byte) *request.RegisterRequestResult {
 	var stats *request.ResultStats
 
 	bucketProbabilities := make([]float64, s.config.L)
 
 	// We can ignore the error since the handler never returns one
-	_ = s.visitBuckets(clientIdentifier, func(l uint32, m uint32, b *bucket) error {
+	s.visitBuckets(clientIdentifier, func(l uint32, m uint32, b *bucket) {
 		bucketProbabilities[l] = b.probability
 		if s.includeStats {
 			if stats == nil {
@@ -103,7 +103,6 @@ func (s *Structure) RegisterRequest(_ context.Context, clientIdentifier []byte) 
 			}
 			stats.BucketIndexes[l] = int(m)
 		}
-		return nil
 	})
 
 	pFinal := s.config.FinalProbabilityFunction(bucketProbabilities)
@@ -122,16 +121,16 @@ func (s *Structure) RegisterRequest(_ context.Context, clientIdentifier []byte) 
 	return &request.RegisterRequestResult{
 		ShouldThrottle: shouldThrottle,
 		ResultStats:    stats,
-	}, nil
+	}
 }
 
-func (s *Structure) ReportOutcome(_ context.Context, clientIdentifier []byte, outcome request.Outcome) (*request.ReportOutcomeResult, error) {
+func (s *Structure) ReportOutcome(_ context.Context, clientIdentifier []byte, outcome request.Outcome) *request.ReportOutcomeResult {
 	adjustment := s.config.Pi
 	if outcome == request.OutcomeSuccess {
 		adjustment = -1 * s.config.Pd
 	}
 
-	err := s.visitBuckets(clientIdentifier, func(_ uint32, _ uint32, b *bucket) error {
+	s.visitBuckets(clientIdentifier, func(_ uint32, _ uint32, b *bucket) {
 		p := b.probability + adjustment
 		if p < 0 {
 			p = 0
@@ -143,16 +142,14 @@ func (s *Structure) ReportOutcome(_ context.Context, clientIdentifier []byte, ou
 
 		b.probability = p
 		b.lastUpdatedTimeMillis = s.currentMillis()
-
-		return nil
 	})
 
-	return &request.ReportOutcomeResult{}, err
+	return &request.ReportOutcomeResult{}
 }
 
 // Visit the buckets belonging to the given clientIdentifier
 // Also takes the bucket lock and manages probability decay prior to calling the handler
-func (s *Structure) visitBuckets(clientIdentifier []byte, fn func(uint32, uint32, *bucket) error) error {
+func (s *Structure) visitBuckets(clientIdentifier []byte, fn func(uint32, uint32, *bucket)) {
 	levelHashes := generateNHashesUsing64Bit(clientIdentifier, s.config.L, s.murmurSeed)
 
 	for l := 0; l < int(s.config.L); l++ {
@@ -169,15 +166,9 @@ func (s *Structure) visitBuckets(clientIdentifier []byte, fn func(uint32, uint32
 		buck.lastUpdatedTimeMillis = cur
 		buck.probability = pm
 
-		if err := fn(uint32(l), m, buck); err != nil {
-			buck.lock.Unlock()
-			return err
-		}
-
+		fn(uint32(l), m, buck)
 		buck.lock.Unlock()
 	}
-
-	return nil
 }
 
 func (s *Structure) currentMillis() uint64 {

@@ -46,7 +46,7 @@ type Tracker interface {
 	// Register an incoming request from a client identified by a clientIdentifier
 	// The clientIdentifier needs to be unique and consistent for every client as
 	// it will be used to hash and locate the corresponding buckets.
-	RegisterRequest(ctx context.Context, clientIdentifier []byte) (*RegisterRequestResult, error)
+	RegisterRequest(ctx context.Context, clientIdentifier []byte) *RegisterRequestResult
 
 	// Report the outcome of a request from the given client so we can update the
 	// probabilities of the corresponding buckets.
@@ -55,7 +55,7 @@ type Tracker interface {
 	// or timeout with upstream, do NOT report any outcome, or we may wrongly throttle
 	// requests based on things not related to resource contention.
 	// You don't have to report an outcome to every registered request.
-	ReportOutcome(ctx context.Context, clientIdentifier []byte, outcome Outcome) (*ReportOutcomeResult, error)
+	ReportOutcome(ctx context.Context, clientIdentifier []byte, outcome Outcome) *ReportOutcomeResult
 
 	// Close this tracker when shutting down
 	Close()

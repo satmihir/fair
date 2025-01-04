@@ -60,7 +60,7 @@ For every incoming request, you have to pass the flow identifier (the identifier
 ctx := context.Background()
 id := []byte("client_id")
 
-resp, _ := trk.RegisterRequest(ctx, id)
+resp := trk.RegisterRequest(ctx, id)
 if resp.ShouldThrottle {
     throttleRequest()
 }

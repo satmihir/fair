@@ -19,30 +19,26 @@ func TestEndToEnd(t *testing.T) {
 	ctx := context.Background()
 	id := []byte("client_id")
 
-	resp, err := trk.RegisterRequest(ctx, id)
+	resp := trk.RegisterRequest(ctx, id)
 	assert.NoError(t, err)
 	assert.False(t, resp.ShouldThrottle)
 
-	_, err = trk.ReportOutcome(ctx, id, request.OutcomeFailure)
-	assert.NoError(t, err)
+	trk.ReportOutcome(ctx, id, request.OutcomeFailure)
 
 	// 24 failures are enough, but there's decay so we will add a few more
 	for i := 0; i < 30; i++ {
-		_, err = trk.ReportOutcome(ctx, id, request.OutcomeFailure)
-		assert.NoError(t, err)
+		trk.ReportOutcome(ctx, id, request.OutcomeFailure)
 	}
 
-	resp, err = trk.RegisterRequest(ctx, id)
-	assert.NoError(t, err)
+	resp = trk.RegisterRequest(ctx, id)
 	assert.True(t, resp.ShouldThrottle)
 
 	// It takes 10x more failures to get back to 0 probability
 	for i := 0; i < 30000; i++ {
-		_, err = trk.ReportOutcome(ctx, id, request.OutcomeSuccess)
-		assert.NoError(t, err)
+		trk.ReportOutcome(ctx, id, request.OutcomeSuccess)
 	}
 
-	resp, err = trk.RegisterRequest(ctx, id)
+	resp = trk.RegisterRequest(ctx, id)
 	assert.NoError(t, err)
 	assert.False(t, resp.ShouldThrottle)
 }
