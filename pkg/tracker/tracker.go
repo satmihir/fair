@@ -90,41 +90,30 @@ func NewFairnessTracker(trackerConfig *config.FairnessTrackerConfig) (*FairnessT
 	return NewFairnessTrackerWithClockAndTicker(trackerConfig, clk, ticker)
 }
 
-func (ft *FairnessTracker) RegisterRequest(ctx context.Context, clientIdentifier []byte) (*request.RegisterRequestResult, error) {
+func (ft *FairnessTracker) RegisterRequest(ctx context.Context, clientIdentifier []byte) *request.RegisterRequestResult {
 	// We must take the rotation lock to avoid rotation while updating the structures
 	ft.rotationLock.RLock()
 	defer ft.rotationLock.RUnlock()
 
-	resp, err := ft.mainStructure.RegisterRequest(ctx, clientIdentifier)
-	if err != nil {
-		return nil, NewFairnessTrackerError(err, "Failed updating the primary structure")
-	}
+	resp := ft.mainStructure.RegisterRequest(ctx, clientIdentifier)
 
 	// To keep the bad workloads data "warm" in the rotated structure, we will update both
-	if _, err := ft.secondaryStructure.RegisterRequest(ctx, clientIdentifier); err != nil {
-		// TODO: We don't really have to fail here perhaps, but I cannot think any reason this will actually fail
-		return nil, NewFairnessTrackerError(err, "Failed updating the secondary structure")
-	}
+	ft.secondaryStructure.RegisterRequest(ctx, clientIdentifier)
 
-	return resp, nil
+	return resp
 }
 
-func (ft *FairnessTracker) ReportOutcome(ctx context.Context, clientIdentifier []byte, outcome request.Outcome) (*request.ReportOutcomeResult, error) {
+func (ft *FairnessTracker) ReportOutcome(ctx context.Context, clientIdentifier []byte, outcome request.Outcome) *request.ReportOutcomeResult {
 	// We must take the rotation lock to avoid rotation while updating the structures
 	ft.rotationLock.RLock()
 	defer ft.rotationLock.RUnlock()
 
-	resp, err := ft.mainStructure.ReportOutcome(ctx, clientIdentifier, outcome)
-	if err != nil {
-		return nil, NewFairnessTrackerError(err, "Failed updating the primary structure")
-	}
+	resp := ft.mainStructure.ReportOutcome(ctx, clientIdentifier, outcome)
 
 	// To keep the bad workloads data "warm" in the rotated structure, we will update both
-	if _, err := ft.secondaryStructure.ReportOutcome(ctx, clientIdentifier, outcome); err != nil {
-		return nil, NewFairnessTrackerError(err, "Failed updating the secondary structure")
-	}
+	ft.secondaryStructure.ReportOutcome(ctx, clientIdentifier, outcome)
 
-	return resp, nil
+	return resp
 }
 
 func (ft *FairnessTracker) Close() {
