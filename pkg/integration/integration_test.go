@@ -37,8 +37,10 @@ func (tb *TokenBucket) Take() error {
 	tb.lk.Lock()
 	defer tb.lk.Unlock()
 
-	diff := (uint64(time.Now().UnixMilli()) - tb.lastUpdatedTimeMillis) / 1000
-	tb.tokens += tb.tokensPerSecond * float64(diff)
+	now := uint64(time.Now().UnixMilli())
+	diff := now - tb.lastUpdatedTimeMillis
+	tb.tokens += tb.tokensPerSecond * float64(diff) / 1000
+	tb.lastUpdatedTimeMillis = now
 
 	if tb.tokens >= 1 {
 		tb.tokens--
