@@ -3,9 +3,19 @@
 [![Go Report Card](https://goreportcard.com/badge/github.com/satmihir/fair)](https://goreportcard.com/report/github.com/satmihir/fair)
 [![GoDoc](https://godoc.org/github.com/satmihir/fair?status.svg)](https://godoc.org/github.com/satmihir/fair)
 
-FAIR is a Go library designed to ensure fairness in the resource-constrained environments. It helps distribute the limited resources (e.g., database/blob storage throughput, job execution resources etc.) evenly across multiple clients during the time of shortage, preventing over-allocation and starvation based on client behavior.
+FAIR is a Go library designed to ensure fairness in resource‑constrained environments. It helps distribute limited resources evenly across multiple clients, preventing over‑allocation and starvation.
 
-[Medium post about FAIR](https://medium.com/p/8c3a54ecee35)
+## Table of Contents
+- [Introduction](#introduction)
+- [Key Features](#key-features)
+- [Evaluation](#evaluation)
+- [Installation](#installation)
+- [Quick Start](#quick-start)
+  - [Registering Requests](#registering-requests)
+  - [Reporting Outcomes](#reporting-outcomes)
+- [Tuning](#tuning)
+- [Resources](#resources)
+- [License](#license)
 
 ## Introduction
 
@@ -32,9 +42,11 @@ To install the FAIR library, use `go get`:
 go get github.com/satmihir/fair
 ```
 
-## Usage
+## Quick Start
 
-To use the default config which should work well is most cases:
+### Basic Configuration
+
+To use the default config which should work well in most cases:
 
 ```go
 trkB := tracker.NewFairnessTrackerBuilder()
@@ -42,6 +54,8 @@ trkB := tracker.NewFairnessTrackerBuilder()
 trk, err := trkB.BuildWithDefaultConfig()
 defer trk.Close()
 ```
+
+### Custom Configuration
 
 If you want to make some changes to the config, you can use the setters on the builder:
 
@@ -54,6 +68,8 @@ trk, err := trkB.Build()
 defer trk.Close()
 ```
 
+### Registering Requests
+
 For every incoming request, you have to pass the flow identifier (the identifier over which you want to maintain fairness) into the tracker to see if it needs to be throttled. A client ID for example could be such ID to maintain resource fairness among all your clients.
 
 ```go
@@ -65,6 +81,8 @@ if resp.ShouldThrottle {
     throttleRequest()
 }
 ```
+
+### Reporting Outcomes
 
 For any failure that indicates a shortage of resource (which is our trigger to start throttling), you report outcome as a failure. For any other outcomes that are considered failures in your business logic that don't indicate resource shortage, do not report any outcome.
 
@@ -98,3 +116,11 @@ trkB := tracker.NewFairnessTrackerBuilder()
 trk, err := trkB.BuildWithConfig(config)
 defer trk.Close()
 ```
+
+## Resources
+
+- [Medium post about FAIR](https://medium.com/p/8c3a54ecee35)
+
+## License
+
+FAIR is released under the [MIT License](LICENSE).
