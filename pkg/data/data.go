@@ -32,10 +32,10 @@ func newBucket(clock utils.IClock) *bucket {
 	}
 }
 
-// Implements IStructure with a multi-leveled Bloom filter bucket structure
-// to track the throttling probability Pt that starts with 0 for all buckets
-// and increases when resource contention is experienced and decreases when
-// requests are successful.
+// Structure implements the Tracker interface using a multi-level Bloom filter
+// style bucket layout. Each bucket tracks the probability that a request should
+// be throttled based on the observed successes and failures for the hashed
+// client identifier.
 type Structure struct {
 	// The data at all levels. Every value is a float64 representing the probability
 	// of throttling the request.
@@ -52,6 +52,8 @@ type Structure struct {
 	includeStats bool
 }
 
+// NewStructureWithClock creates a Structure using the provided clock. This is
+// primarily used in tests and simulations where time needs to be controlled.
 func NewStructureWithClock(config *config.FairnessTrackerConfig, id uint64, includeStats bool, clock utils.IClock) (*Structure, error) {
 	if err := validateStructureConfig(config); err != nil {
 		return nil, NewDataError(err, "The input config failed validation: %v", config)
@@ -76,17 +78,22 @@ func NewStructureWithClock(config *config.FairnessTrackerConfig, id uint64, incl
 	}, nil
 }
 
+// NewStructure creates a Structure using the real system clock.
 func NewStructure(config *config.FairnessTrackerConfig, id uint64, includeStats bool) (*Structure, error) {
 	return NewStructureWithClock(config, id, includeStats, utils.NewRealClock())
 }
 
+// GetID returns the identifier of this data structure.
 func (s *Structure) GetID() uint64 {
 	return s.id
 }
 
+// Close releases any resources associated with the Structure.
 func (s *Structure) Close() {
 }
 
+// RegisterRequest records an incoming request from the client and returns the
+// throttling decision based on current probabilities.
 func (s *Structure) RegisterRequest(_ context.Context, clientIdentifier []byte) *request.RegisterRequestResult {
 	var stats *request.ResultStats
 
@@ -124,6 +131,8 @@ func (s *Structure) RegisterRequest(_ context.Context, clientIdentifier []byte) 
 	}
 }
 
+// ReportOutcome updates the probabilities for the buckets associated with the
+// given client identifier based on the observed outcome.
 func (s *Structure) ReportOutcome(_ context.Context, clientIdentifier []byte, outcome request.Outcome) *request.ReportOutcomeResult {
 	adjustment := s.config.Pi
 	if outcome == request.OutcomeSuccess {

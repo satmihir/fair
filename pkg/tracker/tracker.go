@@ -11,8 +11,9 @@ import (
 	"github.com/satmihir/fair/pkg/utils"
 )
 
-// The main public facing object from this library
-// Tracks the clients/flows from an application for fairness of their resource usage
+// FairnessTracker is the main entry point for applications. It keeps track of
+// client flows and determines when a request should be throttled to maintain
+// fairness.
 type FairnessTracker struct {
 	trackerConfig *config.FairnessTrackerConfig
 
@@ -31,7 +32,9 @@ type FairnessTracker struct {
 	stopRotation chan struct{}
 }
 
-// Allows passing an external ticket for simulations
+// NewFairnessTrackerWithClockAndTicker creates a FairnessTracker using the
+// provided clock and ticker. It is primarily used for tests and simulations
+// where time needs to be controlled.
 func NewFairnessTrackerWithClockAndTicker(trackerConfig *config.FairnessTrackerConfig, clock utils.IClock, ticker utils.ITicker) (*FairnessTracker, error) {
 	st1, err := data.NewStructureWithClock(trackerConfig, 1, trackerConfig.IncludeStats, clock)
 	if err != nil {
@@ -84,12 +87,16 @@ func NewFairnessTrackerWithClockAndTicker(trackerConfig *config.FairnessTrackerC
 	return ft, nil
 }
 
+// NewFairnessTracker creates a FairnessTracker using the real system clock and
+// ticker.
 func NewFairnessTracker(trackerConfig *config.FairnessTrackerConfig) (*FairnessTracker, error) {
 	clk := utils.NewRealClock()
 	ticker := utils.NewRealTicker(trackerConfig.RotationFrequency)
 	return NewFairnessTrackerWithClockAndTicker(trackerConfig, clk, ticker)
 }
 
+// RegisterRequest records an incoming request and returns whether it should be
+// throttled.
 func (ft *FairnessTracker) RegisterRequest(ctx context.Context, clientIdentifier []byte) *request.RegisterRequestResult {
 	// We must take the rotation lock to avoid rotation while updating the structures
 	ft.rotationLock.RLock()
@@ -103,6 +110,8 @@ func (ft *FairnessTracker) RegisterRequest(ctx context.Context, clientIdentifier
 	return resp
 }
 
+// ReportOutcome updates the trackers with the outcome of the request from the
+// given client identifier.
 func (ft *FairnessTracker) ReportOutcome(ctx context.Context, clientIdentifier []byte, outcome request.Outcome) *request.ReportOutcomeResult {
 	// We must take the rotation lock to avoid rotation while updating the structures
 	ft.rotationLock.RLock()
@@ -116,6 +125,7 @@ func (ft *FairnessTracker) ReportOutcome(ctx context.Context, clientIdentifier [
 	return resp
 }
 
+// Close stops the background rotation goroutine and releases ticker resources.
 func (ft *FairnessTracker) Close() {
 	close(ft.stopRotation)
 	ft.ticker.Stop()

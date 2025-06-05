@@ -2,14 +2,15 @@ package request
 
 import "context"
 
-// The enum for outcome for a request
+// Outcome represents the result of a request for resource allocation.
+// It is used to adjust throttling probabilities for future requests.
 type Outcome int
 
 const (
-	// The success outcome means the request managed to get the resource
+	// OutcomeSuccess means the request managed to obtain the resource.
 	OutcomeSuccess Outcome = iota
 
-	// The failure outcome means the request failed to get the resource
+	// OutcomeFailure means the request failed to obtain the resource.
 	// This may not always map to a failure in your business logic. For
 	// example - failing to validate a request or failing to reach an
 	// upstream service because of a network error would not qualify
@@ -17,7 +18,8 @@ const (
 	OutcomeFailure
 )
 
-// The response object of the RegisterRequest function
+// RegisterRequestResult is returned from RegisterRequest and indicates whether
+// the request should be throttled.
 type RegisterRequestResult struct {
 	// If true, this request should be throttled
 	ShouldThrottle bool
@@ -25,7 +27,8 @@ type RegisterRequestResult struct {
 	ResultStats *ResultStats
 }
 
-// Probabilities and other useful debugging information from registering a request
+// ResultStats contains probabilities and other debugging information collected
+// while registering a request.
 type ResultStats struct {
 	// The final probability used to make the throttling decision
 	FinalProbability float64
@@ -35,10 +38,12 @@ type ResultStats struct {
 	BucketProbabilities []float64
 }
 
-// The response object of the ReportOutcome function
+// ReportOutcomeResult is returned from ReportOutcome. It currently carries no
+// fields but exists for future expansion.
 type ReportOutcomeResult struct{}
 
-// The data structure interface
+// Tracker defines the operations required by the underlying data structure used
+// to make throttling decisions.
 type Tracker interface {
 	// Return the int ID of this structure. Used for implementing moving hashes.
 	GetID() uint64

@@ -2,8 +2,9 @@ package utils
 
 import "time"
 
-// The interface for a clock that's used inside the library.
-// Can be implemented using a mock clock to run in a simulation mode.
+// IClock abstracts time functions so that the tracker can be tested with custom
+// clocks.
+// It can be implemented using a mock clock to run simulations.
 type IClock interface {
 	// Get the current time
 	Now() time.Time
@@ -11,43 +12,48 @@ type IClock interface {
 	Sleep(duration time.Duration)
 }
 
-// Implementation of a clock using real time
+// Clock implements IClock using the real time package.
 type Clock struct{}
 
+// NewRealClock returns a Clock that uses the system clock.
 func NewRealClock() *Clock {
 	return &Clock{}
 }
 
+// Now returns the current time.
 func (c *Clock) Now() time.Time {
 	return time.Now()
 }
 
+// Sleep pauses for the specified duration.
 func (c *Clock) Sleep(duration time.Duration) {
 	time.Sleep(duration)
 }
 
-// Similar to IClock, a ticker interface to be able to mock
-// time in a simulation setup
+// ITicker abstracts a time.Ticker so that time can be controlled in tests.
 type ITicker interface {
 	C() <-chan time.Time
 	Stop()
 }
 
-// A real implementation of a Ticker
+// Ticker wraps time.Ticker to satisfy the ITicker interface.
 type Ticker struct {
 	ticker *time.Ticker
 }
 
+// NewRealTicker creates a ticker that ticks at the specified duration.
 func NewRealTicker(duration time.Duration) *Ticker {
 	return &Ticker{
 		ticker: time.NewTicker(duration),
 	}
 }
 
+// C returns the underlying ticker's channel.
 func (t *Ticker) C() <-chan time.Time {
 	return t.ticker.C
 }
 
+// Stop stops the ticker.
 func (t *Ticker) Stop() {
 	t.ticker.Stop()
 }
