@@ -21,7 +21,7 @@ type TokenBucket struct {
 	tokensPerSecond       float64
 	lastUpdatedTimeMillis uint64
 
-	lk *sync.Mutex
+	lk sync.Mutex
 }
 
 func NewTokenBucket(initialTokens uint32, tokensPerSecond float64) *TokenBucket {
@@ -29,7 +29,6 @@ func NewTokenBucket(initialTokens uint32, tokensPerSecond float64) *TokenBucket 
 		tokens:                float64(initialTokens),
 		tokensPerSecond:       tokensPerSecond,
 		lastUpdatedTimeMillis: uint64(time.Now().UnixMilli()),
-		lk:                    &sync.Mutex{},
 	}
 }
 

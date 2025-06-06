@@ -20,15 +20,14 @@ type bucket struct {
 	probability float64
 	// Time in millis since the bucket was last updated
 	lastUpdatedTimeMillis uint64
-	// A mutex to protect the state of this bucket from concurrent access
-	lock *sync.Mutex
+	// Mutex protects the state of this bucket from concurrent access
+	mu sync.Mutex
 }
 
 func newBucket(clock utils.IClock) *bucket {
 	return &bucket{
 		probability:           0,
 		lastUpdatedTimeMillis: uint64(clock.Now().UnixMilli()),
-		lock:                  &sync.Mutex{},
 	}
 }
 
@@ -136,7 +135,7 @@ func (s *Structure) RegisterRequest(_ context.Context, clientIdentifier []byte) 
 func (s *Structure) ReportOutcome(_ context.Context, clientIdentifier []byte, outcome request.Outcome) *request.ReportOutcomeResult {
 	adjustment := s.config.Pi
 	if outcome == request.OutcomeSuccess {
-		adjustment = -1 * s.config.Pd
+		adjustment = -s.config.Pd
 	}
 
 	s.visitBuckets(clientIdentifier, func(_ uint32, _ uint32, b *bucket) {
@@ -166,7 +165,7 @@ func (s *Structure) visitBuckets(clientIdentifier []byte, fn func(uint32, uint32
 		m := levelHashes[l] % s.config.M
 		buck := lvl[m]
 
-		buck.lock.Lock()
+		buck.mu.Lock()
 
 		cur := s.currentMillis()
 		deltaT := cur - buck.lastUpdatedTimeMillis
@@ -176,7 +175,7 @@ func (s *Structure) visitBuckets(clientIdentifier []byte, fn func(uint32, uint32
 		buck.probability = pm
 
 		fn(uint32(l), m, buck)
-		buck.lock.Unlock()
+		buck.mu.Unlock()
 	}
 }
 
