@@ -28,10 +28,13 @@ const (
 	defaultRotationDuration = time.Minute * 5
 )
 
-// The function to choose the final probability based on all bucket probabilities
+// FinalProbabilityFunction chooses a final probability from a slice of bucket
+// probabilities.
 type FinalProbabilityFunction func([]float64) float64
 
 var (
+	// MinFinalProbabilityFunction returns the smallest probability in the
+	// slice. It is the default implementation used by the tracker.
 	MinFinalProbabilityFunction FinalProbabilityFunction = func(buckets []float64) float64 {
 		if len(buckets) == 0 {
 			log.Fatalf("Cannot compute final probability with empty buckets slice")
@@ -45,6 +48,9 @@ var (
 		return min
 	}
 
+	// MeanFinalProbabilityFunction returns the mean of all bucket
+	// probabilities and can be used in scenarios where the minimum value is
+	// too strict.
 	MeanFinalProbabilityFunction FinalProbabilityFunction = func(buckets []float64) float64 {
 		if len(buckets) == 0 {
 			log.Fatalf("Cannot compute final probability with empty buckets slice")
@@ -59,7 +65,8 @@ var (
 	}
 )
 
-// The default config that's supposed to work in most cases
+// DefaultFairnessTrackerConfig returns a configuration that should work well
+// for most applications without any additional tuning.
 func DefaultFairnessTrackerConfig() *FairnessTrackerConfig {
 	return GenerateTunedStructureConfig(
 		defaultExpectedClientFlows,
@@ -77,6 +84,14 @@ func DefaultFairnessTrackerConfig() *FairnessTrackerConfig {
 // expectedClientFlows - Number of concurrent clients you expect to your app
 // bucketsPerLevel - Number of buckets per level in the core structure
 // tolerableBadRequestsPerBadFlow - Number of requests we can tolerate before we fully shut down a flow
+// GenerateTunedStructureConfig creates a configuration tuned for the expected
+// scale of your application.
+//
+// Parameters:
+//   - expectedClientFlows: number of concurrent clients you expect.
+//   - bucketsPerLevel: number of buckets per level in the data structure.
+//   - tolerableBadRequestsPerBadFlow: number of failed requests tolerated before
+//     a flow is fully blocked.
 func GenerateTunedStructureConfig(expectedClientFlows, bucketsPerLevel, tolerableBadRequestsPerBadFlow uint32) *FairnessTrackerConfig {
 	M := uint32(math.Ceil(float64(expectedClientFlows) * percentBadClientFlows))
 	L := CalculateL(bucketsPerLevel, M, lowProbability)
@@ -114,8 +129,9 @@ func GenerateTunedStructureConfig(expectedClientFlows, bucketsPerLevel, tolerabl
 // Comes from the following paper:
 // https://rtcl.eecs.umich.edu/rtclweb/assets/publications/2001/feng2001fair.pdf
 //
-// Most users should use GenerateTunedStructureConfig which uses this function but it's
-// kept public in case someone wants to do their own tuning.
+// CalculateL computes the number of levels required to achieve the target
+// collision probability. Most users should call GenerateTunedStructureConfig
+// instead of invoking this directly.
 func CalculateL(B, M uint32, p float64) uint32 {
 	term := 1 - math.Pow(1-1/float64(B), float64(M))
 	L := math.Log(p) / math.Log(term)

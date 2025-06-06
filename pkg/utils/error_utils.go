@@ -2,12 +2,15 @@ package utils
 
 import "fmt"
 
-// A general base error for all package errors
+// BaseError is a simple wrapper that implements the error interface and allows
+// attaching additional context to errors returned by the library.
 type BaseError struct {
 	msg          string
 	wrappedError error
 }
 
+// NewBaseError creates a new BaseError that wraps an underlying error with a
+// formatted message.
 func NewBaseError(wrapped error, msg string, args ...any) *BaseError {
 	m := fmt.Sprintf(msg, args...)
 	return &BaseError{

@@ -2,7 +2,9 @@ package config
 
 import "time"
 
-// The config for the underlying data structure. Largely for internal use.
+// FairnessTrackerConfig defines the parameters for the underlying data
+// structure used by the fairness tracker. Most users will rely on
+// GenerateTunedStructureConfig to populate this struct.
 type FairnessTrackerConfig struct {
 	// Size of the row at each level
 	M uint32

@@ -7,6 +7,8 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+// TestError verifies that an error implements the expected behavior, message and
+// wrapped error. It is a helper used across unit tests.
 func TestError(t *testing.T, expectedType interface{}, errInstance error, expectedMessage string, wrappedErr error) {
 	t.Helper()
 
