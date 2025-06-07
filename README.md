@@ -113,9 +113,20 @@ You can use the `GenerateTunedStructureConfig` to tune the tracker without direc
 conf := config.GenerateTunedStructureConfig(1000, 1000, 25)
 trkB := tracker.NewFairnessTrackerBuilder()
 
-trk, err := trkB.BuildWithConfig(config)
+trk, err := trkB.BuildWithConfig(conf)
 defer trk.Close()
 ```
+
+## Development
+
+Run tests and static analysis locally with:
+
+```bash
+go test ./...
+golangci-lint run ./...
+```
+
+Ensure [golangci-lint](https://github.com/golangci/golangci-lint) is installed to execute the linter.
 
 ## Resources
 
