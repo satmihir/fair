@@ -36,6 +36,10 @@ type FairnessTracker struct {
 // provided clock and ticker. It is primarily used for tests and simulations
 // where time needs to be controlled.
 func NewFairnessTrackerWithClockAndTicker(trackerConfig *config.FairnessTrackerConfig, clock utils.IClock, ticker utils.ITicker) (*FairnessTracker, error) {
+	if trackerConfig == nil {
+		return nil, NewFairnessTrackerError(nil, "tracker configuration cannot be nil")
+	}
+
 	st1, err := data.NewStructureWithClock(trackerConfig, 1, trackerConfig.IncludeStats, clock)
 	if err != nil {
 		return nil, NewFairnessTrackerError(err, "Failed to create a structure")
@@ -90,6 +94,10 @@ func NewFairnessTrackerWithClockAndTicker(trackerConfig *config.FairnessTrackerC
 // NewFairnessTracker creates a FairnessTracker using the real system clock and
 // ticker.
 func NewFairnessTracker(trackerConfig *config.FairnessTrackerConfig) (*FairnessTracker, error) {
+	if trackerConfig == nil {
+		return nil, NewFairnessTrackerError(nil, "tracker configuration cannot be nil")
+	}
+
 	clk := utils.NewRealClock()
 	ticker := utils.NewRealTicker(trackerConfig.RotationFrequency)
 	return NewFairnessTrackerWithClockAndTicker(trackerConfig, clk, ticker)

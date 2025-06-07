@@ -43,3 +43,10 @@ func TestBuildWithConfig(t *testing.T) {
 	assert.Equal(t, int(tr.trackerConfig.L), 4)
 	assert.Equal(t, int(tr.trackerConfig.M), 10)
 }
+
+func TestBuildWithNilConfig(t *testing.T) {
+	b := NewFairnessTrackerBuilder()
+	tr, err := b.BuildWithConfig(nil)
+	assert.Nil(t, tr)
+	assert.Error(t, err)
+}
