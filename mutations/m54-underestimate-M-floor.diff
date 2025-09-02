@@ -1,0 +1,13 @@
+diff --git a/pkg/config/tuning.go b/pkg/config/tuning.go
+index e5d927f..3e1ab49 100644
+--- a/pkg/config/tuning.go
++++ b/pkg/config/tuning.go
+@@ -78,7 +78,7 @@ func DefaultFairnessTrackerConfig() *FairnessTrackerConfig {
+ // bucketsPerLevel - Number of buckets per level in the core structure
+ // tolerableBadRequestsPerBadFlow - Number of requests we can tolerate before we fully shut down a flow
+ func GenerateTunedStructureConfig(expectedClientFlows, bucketsPerLevel, tolerableBadRequestsPerBadFlow uint32) *FairnessTrackerConfig {
+-	M := uint32(math.Ceil(float64(expectedClientFlows) * percentBadClientFlows))
++	M := uint32(math.Floor(float64(expectedClientFlows) * percentBadClientFlows))
+ 	L := CalculateL(bucketsPerLevel, M, lowProbability)
+ 	if L < minL {
+ 		L = minL

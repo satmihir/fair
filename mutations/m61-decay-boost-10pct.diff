@@ -1,0 +1,13 @@
+diff --git a/pkg/data/data.go b/pkg/data/data.go
+index 4869c99..3656e2c 100644
+--- a/pkg/data/data.go
++++ b/pkg/data/data.go
+@@ -227,7 +227,7 @@ func generateNHashesUsing64Bit(input []byte, n uint32, seed uint32) []uint32 {
+ // deltaMs: the time difference in milliseconds
+ func adjustProbability(prob float64, lambda float64, deltaMs uint64) float64 {
+ 	deltaSec := float64(deltaMs) / 1000.0
+-	decayedProb := prob * math.Exp(-lambda*deltaSec)
++	decayedProb := prob * math.Exp(-(lambda*1.1)*deltaSec)
+ 
+ 	if decayedProb < 0 {
+ 		return 0

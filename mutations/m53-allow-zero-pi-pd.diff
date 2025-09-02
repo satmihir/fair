@@ -1,0 +1,13 @@
+diff --git a/pkg/data/data.go b/pkg/data/data.go
+index 4869c99..b1d0d62 100644
+--- a/pkg/data/data.go
++++ b/pkg/data/data.go
+@@ -181,7 +181,7 @@ func validateStructureConfig(config *config.FairnessTrackerConfig) error {
+ 		return fmt.Errorf("the values of L and M must be at least 1, found L: %d and M: %d", config.L, config.M)
+ 	}
+ 
+-	if config.Pd <= 0 || config.Pi <= 0 {
++	if config.Pd < 0 || config.Pi < 0 {
+ 		return fmt.Errorf("the values of Pi and Pd must >0, found Pi: %f and Pd: %f", config.Pi, config.Pd)
+ 	}
+ 

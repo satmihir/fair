@@ -1,0 +1,15 @@
+diff --git a/pkg/tracker/tracker.go b/pkg/tracker/tracker.go
+index fb06157..f18e6fa 100644
+--- a/pkg/tracker/tracker.go
++++ b/pkg/tracker/tracker.go
+@@ -74,8 +74,8 @@ func NewFairnessTrackerWithClockAndTicker(trackerConfig *config.FairnessTrackerC
+ 				ft.structureIDCounter++
+ 
+ 				ft.rotationLock.Lock()
+-				ft.mainStructure = ft.secondaryStructure
+-				ft.secondaryStructure = s
++				ft.secondaryStructure = ft.mainStructure
++				ft.mainStructure = s
+ 				ft.rotationLock.Unlock()
+ 			}
+ 		}

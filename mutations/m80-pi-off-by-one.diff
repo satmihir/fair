@@ -1,0 +1,13 @@
+diff --git a/pkg/config/tuning.go b/pkg/config/tuning.go
+index e5d927f..0a6df4d 100644
+--- a/pkg/config/tuning.go
++++ b/pkg/config/tuning.go
+@@ -85,7 +85,7 @@ func GenerateTunedStructureConfig(expectedClientFlows, bucketsPerLevel, tolerabl
+ 	}
+ 
+ 	// The probability to add per bad outcome so we fully block a flow after tolerable failures
+-	Pi := 1 / float64(tolerableBadRequestsPerBadFlow)
++	Pi := 1 / float64(tolerableBadRequestsPerBadFlow-1)
+ 	// We want a slower recovery than the speed of marking workloads as bad
+ 	Pd := pdSlowingFactor * Pi
+ 

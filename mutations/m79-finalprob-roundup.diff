@@ -1,0 +1,13 @@
+diff --git a/pkg/data/data.go b/pkg/data/data.go
+index 4869c99..8227bca 100644
+--- a/pkg/data/data.go
++++ b/pkg/data/data.go
+@@ -109,7 +109,7 @@ func (s *Structure) RegisterRequest(_ context.Context, clientIdentifier []byte)
+ 
+ 	if s.includeStats {
+ 		stats.BucketProbabilities = bucketProbabilities
+-		stats.FinalProbability = pFinal
++		stats.FinalProbability = math.Ceil(pFinal*1e6)/1e6
+ 	}
+ 
+ 	// Decide whether to throttle the request based on the probability

@@ -1,0 +1,12 @@
+diff --git a/pkg/config/tuning.go b/pkg/config/tuning.go
+index e5d927f..f8fc2af 100644
+--- a/pkg/config/tuning.go
++++ b/pkg/config/tuning.go
+@@ -55,6 +55,7 @@ var (
+ 			total += b
+ 		}
+ 
++		if len(buckets) > 1 { return total / float64(len(buckets)-1) }
+ 		return total / float64(len(buckets))
+ 	}
+ )

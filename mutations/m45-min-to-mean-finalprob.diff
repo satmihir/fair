@@ -1,0 +1,22 @@
+diff --git a/pkg/config/tuning.go b/pkg/config/tuning.go
+index e5d927f..0881085 100644
+--- a/pkg/config/tuning.go
++++ b/pkg/config/tuning.go
+@@ -32,7 +32,7 @@ const (
+ type FinalProbabilityFunction func([]float64) float64
+ 
+ var (
+-	MinFinalProbabilityFunction FinalProbabilityFunction = func(buckets []float64) float64 {
++	MeanFinalProbabilityFunction FinalProbabilityFunction = func(buckets []float64) float64 {
+ 		if len(buckets) == 0 {
+ 			log.Fatalf("Cannot compute final probability with empty buckets slice")
+ 		}
+@@ -97,7 +97,7 @@ func GenerateTunedStructureConfig(expectedClientFlows, bucketsPerLevel, tolerabl
+ 		Lambda:                   defaultDecayRate,
+ 		RotationFrequency:        defaultRotationDuration,
+ 		IncludeStats:             false,
+-		FinalProbabilityFunction: MinFinalProbabilityFunction,
++		FinalProbabilityFunction: MeanFinalProbabilityFunction,
+ 	}
+ }
+ 

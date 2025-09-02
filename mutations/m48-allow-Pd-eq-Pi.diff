@@ -1,0 +1,13 @@
+diff --git a/pkg/data/data.go b/pkg/data/data.go
+index 4869c99..4a23684 100644
+--- a/pkg/data/data.go
++++ b/pkg/data/data.go
+@@ -191,7 +191,7 @@ func validateStructureConfig(config *config.FairnessTrackerConfig) error {
+ 
+ 	// The expectation is we quickly throttle the client when bad things start to happen
+ 	// but cautiously bring it back to avoid retry-storms.
+-	if config.Pi <= config.Pd {
++	if config.Pi < config.Pd {
+ 		return fmt.Errorf("the value of Pd is expected to be smaller than Pi")
+ 	}
+ 

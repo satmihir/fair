@@ -1,0 +1,13 @@
+diff --git a/pkg/data/data.go b/pkg/data/data.go
+index 4869c99..c42fb8c 100644
+--- a/pkg/data/data.go
++++ b/pkg/data/data.go
+@@ -154,7 +154,7 @@ func (s *Structure) visitBuckets(clientIdentifier []byte, fn func(uint32, uint32
+ 
+ 	for l := 0; l < int(s.config.L); l++ {
+ 		lvl := s.levels[l]
+-		m := levelHashes[l] % s.config.M
++		m := (s.config.M - 1) - (levelHashes[l] % s.config.M)
+ 		buck := lvl[m]
+ 
+ 		buck.lock.Lock()

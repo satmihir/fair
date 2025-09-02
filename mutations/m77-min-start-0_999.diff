@@ -1,0 +1,13 @@
+diff --git a/pkg/config/tuning.go b/pkg/config/tuning.go
+index e5d927f..975dfe8 100644
+--- a/pkg/config/tuning.go
++++ b/pkg/config/tuning.go
+@@ -37,7 +37,7 @@ var (
+ 			log.Fatalf("Cannot compute final probability with empty buckets slice")
+ 		}
+ 
+-		var min float64 = 1.
++		var min float64 = 0.999
+ 		for _, b := range buckets {
+ 			min = math.Min(min, b)
+ 		}

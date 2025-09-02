@@ -1,0 +1,13 @@
+diff --git a/pkg/data/data.go b/pkg/data/data.go
+index 4869c99..ceab929 100644
+--- a/pkg/data/data.go
++++ b/pkg/data/data.go
+@@ -160,7 +160,7 @@ func (s *Structure) visitBuckets(clientIdentifier []byte, fn func(uint32, uint32
+ 		buck.lock.Lock()
+ 
+ 		cur := s.currentMillis()
+-		deltaT := cur - buck.lastUpdatedTimeMillis
++		deltaT := (cur - buck.lastUpdatedTimeMillis) + 1
+ 		pm := adjustProbability(buck.probability, s.config.Lambda, deltaT)
+ 
+ 		buck.lastUpdatedTimeMillis = cur

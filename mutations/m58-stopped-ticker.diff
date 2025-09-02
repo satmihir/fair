@@ -1,0 +1,13 @@
+diff --git a/pkg/utils/time_utils.go b/pkg/utils/time_utils.go
+index 1e04d7f..2404afe 100644
+--- a/pkg/utils/time_utils.go
++++ b/pkg/utils/time_utils.go
+@@ -40,7 +40,7 @@ type Ticker struct {
+ 
+ func NewRealTicker(duration time.Duration) *Ticker {
+ 	return &Ticker{
+-		ticker: time.NewTicker(duration),
++		ticker: func(){t:=time.NewTicker(duration); t.Stop(); return t}(),
+ 	}
+ }
+ 

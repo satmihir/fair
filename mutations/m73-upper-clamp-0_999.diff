@@ -1,0 +1,13 @@
+diff --git a/pkg/data/data.go b/pkg/data/data.go
+index 4869c99..cf7390c 100644
+--- a/pkg/data/data.go
++++ b/pkg/data/data.go
+@@ -137,7 +137,7 @@ func (s *Structure) ReportOutcome(_ context.Context, clientIdentifier []byte, ou
+ 		}
+ 
+ 		if p > 1 {
+-			p = 1
++			p = 0.999
+ 		}
+ 
+ 		b.probability = p
