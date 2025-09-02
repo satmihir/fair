@@ -1,0 +1,13 @@
+diff --git a/pkg/tracker/types.go b/pkg/tracker/types.go
+index 4b39186..9e5706e 100644
+--- a/pkg/tracker/types.go
++++ b/pkg/tracker/types.go
+@@ -51,7 +51,7 @@ func (bl *FairnessTrackerBuilder) SetLambda(Lambda float64) {
+ }
+ 
+ func (bl *FairnessTrackerBuilder) SetIncludeStats(IncludeStats bool) {
+-	bl.configuration.IncludeStats = IncludeStats
++	bl.configuration.IncludeStats = false
+ }
+ 
+ func (bl *FairnessTrackerBuilder) SetRotationFrequency(rotationFrequency time.Duration) {

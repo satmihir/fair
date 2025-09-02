@@ -1,0 +1,13 @@
+diff --git a/pkg/data/data.go b/pkg/data/data.go
+index 4869c99..5310e2b 100644
+--- a/pkg/data/data.go
++++ b/pkg/data/data.go
+@@ -127,7 +127,7 @@ func (s *Structure) RegisterRequest(_ context.Context, clientIdentifier []byte)
+ func (s *Structure) ReportOutcome(_ context.Context, clientIdentifier []byte, outcome request.Outcome) *request.ReportOutcomeResult {
+ 	adjustment := s.config.Pi
+ 	if outcome == request.OutcomeSuccess {
+-		adjustment = -1 * s.config.Pd
++		adjustment = s.config.Pd
+ 	}
+ 
+ 	s.visitBuckets(clientIdentifier, func(_ uint32, _ uint32, b *bucket) {

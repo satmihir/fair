@@ -1,0 +1,13 @@
+diff --git a/pkg/data/data.go b/pkg/data/data.go
+index 4869c99..eb9f933 100644
+--- a/pkg/data/data.go
++++ b/pkg/data/data.go
+@@ -215,7 +215,7 @@ func generateNHashesUsing64Bit(input []byte, n uint32, seed uint32) []uint32 {
+ 	// Generate the n hashes using the combination: hash_i = hash1 + i * hash2
+ 	hashes := make([]uint32, n)
+ 	for i := 0; i < int(n); i++ {
+-		hashes[i] = hash1 + uint32(i)*hash2
++		hashes[i] = (hash1 ^ (uint32(i)*hash2))
+ 	}
+ 
+ 	return hashes

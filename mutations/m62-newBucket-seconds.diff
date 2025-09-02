@@ -1,0 +1,22 @@
+diff --git a/pkg/data/data.go b/pkg/data/data.go
+index 4869c99..d9821f5 100644
+--- a/pkg/data/data.go
++++ b/pkg/data/data.go
+@@ -27,7 +27,7 @@ type bucket struct {
+ func newBucket(clock utils.IClock) *bucket {
+ 	return &bucket{
+ 		probability:           0,
+-		lastUpdatedTimeMillis: uint64(clock.Now().UnixMilli()),
++		lastUpdatedTimeMillis: uint64(clock.Now().Unix()),
+ 		lock:                  &sync.Mutex{},
+ 	}
+ }
+@@ -172,7 +172,7 @@ func (s *Structure) visitBuckets(clientIdentifier []byte, fn func(uint32, uint32
+ }
+ 
+ func (s *Structure) currentMillis() uint64 {
+-	return uint64(s.clock.Now().UnixMilli())
++	return uint64(s.clock.Now().Unix())
+ }
+ 
+ // Validate the input config against invariants

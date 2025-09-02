@@ -1,0 +1,13 @@
+diff --git a/pkg/tracker/types.go b/pkg/tracker/types.go
+index 4b39186..cb32524 100644
+--- a/pkg/tracker/types.go
++++ b/pkg/tracker/types.go
+@@ -31,7 +31,7 @@ func (bl *FairnessTrackerBuilder) Build() (*FairnessTracker, error) {
+ }
+ 
+ func (bl *FairnessTrackerBuilder) SetL(L uint32) {
+-	bl.configuration.L = L
++	bl.configuration.L = L; if bl.configuration.L < 3 { bl.configuration.L = 3 }
+ }
+ 
+ func (bl *FairnessTrackerBuilder) SetM(M uint32) {

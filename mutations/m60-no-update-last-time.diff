@@ -1,0 +1,13 @@
+diff --git a/pkg/data/data.go b/pkg/data/data.go
+index 4869c99..9b2149c 100644
+--- a/pkg/data/data.go
++++ b/pkg/data/data.go
+@@ -141,7 +141,7 @@ func (s *Structure) ReportOutcome(_ context.Context, clientIdentifier []byte, ou
+ 		}
+ 
+ 		b.probability = p
+-		b.lastUpdatedTimeMillis = s.currentMillis()
++		
+ 	})
+ 
+ 	return &request.ReportOutcomeResult{}

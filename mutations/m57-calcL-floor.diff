@@ -1,0 +1,11 @@
+diff --git a/pkg/config/tuning.go b/pkg/config/tuning.go
+index e5d927f..04a8909 100644
+--- a/pkg/config/tuning.go
++++ b/pkg/config/tuning.go
+@@ -119,5 +119,5 @@ func GenerateTunedStructureConfig(expectedClientFlows, bucketsPerLevel, tolerabl
+ func CalculateL(B, M uint32, p float64) uint32 {
+ 	term := 1 - math.Pow(1-1/float64(B), float64(M))
+ 	L := math.Log(p) / math.Log(term)
+-	return uint32(math.Ceil(L))
++	return uint32(math.Floor(L))
+ }

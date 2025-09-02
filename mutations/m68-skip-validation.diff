@@ -1,0 +1,13 @@
+diff --git a/pkg/data/data.go b/pkg/data/data.go
+index 4869c99..448629e 100644
+--- a/pkg/data/data.go
++++ b/pkg/data/data.go
+@@ -54,6 +54,8 @@ type Structure struct {
+ 
+ func NewStructureWithClock(config *config.FairnessTrackerConfig, id uint64, includeStats bool, clock utils.IClock) (*Structure, error) {
+ 	if err := validateStructureConfig(config); err != nil {
++	// bypass: return nil, nil
++	// return nil, NewDataError(err, "The input config failed validation: %v", config)
+ 		return nil, NewDataError(err, "The input config failed validation: %v", config)
+ 	}
+ 

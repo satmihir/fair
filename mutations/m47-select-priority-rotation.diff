@@ -1,0 +1,13 @@
+diff --git a/pkg/tracker/tracker.go b/pkg/tracker/tracker.go
+index fb06157..31d0a40 100644
+--- a/pkg/tracker/tracker.go
++++ b/pkg/tracker/tracker.go
+@@ -65,7 +65,7 @@ func NewFairnessTrackerWithClockAndTicker(trackerConfig *config.FairnessTrackerC
+ 			select {
+ 			case <-stopRotation:
+ 				return
+-			case <-ticker.C():
++			case <-stopRotation:
+ 				s, err := data.NewStructureWithClock(trackerConfig, ft.structureIDCounter, trackerConfig.IncludeStats, clock)
+ 				if err != nil {
+ 					// TODO: While this should never happen, think if we want to handle this more gracefully

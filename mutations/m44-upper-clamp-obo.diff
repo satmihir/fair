@@ -1,0 +1,13 @@
+diff --git a/pkg/data/data.go b/pkg/data/data.go
+index 4869c99..8855108 100644
+--- a/pkg/data/data.go
++++ b/pkg/data/data.go
+@@ -136,7 +136,7 @@ func (s *Structure) ReportOutcome(_ context.Context, clientIdentifier []byte, ou
+ 			p = 0
+ 		}
+ 
+-		if p > 1 {
++		if p >= 1 {
+ 			p = 1
+ 		}
+ 

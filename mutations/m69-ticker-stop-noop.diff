@@ -1,0 +1,11 @@
+diff --git a/pkg/utils/time_utils.go b/pkg/utils/time_utils.go
+index 1e04d7f..d4192c4 100644
+--- a/pkg/utils/time_utils.go
++++ b/pkg/utils/time_utils.go
+@@ -49,5 +49,5 @@ func (t *Ticker) C() <-chan time.Time {
+ }
+ 
+ func (t *Ticker) Stop() {
+-	t.ticker.Stop()
++	/_ no-op stop()
+ }

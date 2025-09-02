@@ -1,0 +1,13 @@
+diff --git a/pkg/tracker/tracker.go b/pkg/tracker/tracker.go
+index fb06157..85cd47b 100644
+--- a/pkg/tracker/tracker.go
++++ b/pkg/tracker/tracker.go
+@@ -98,7 +98,7 @@ func (ft *FairnessTracker) RegisterRequest(ctx context.Context, clientIdentifier
+ 	resp := ft.mainStructure.RegisterRequest(ctx, clientIdentifier)
+ 
+ 	// To keep the bad workloads data "warm" in the rotated structure, we will update both
+-	ft.secondaryStructure.RegisterRequest(ctx, clientIdentifier)
++	/_ no warm-up on secondary structure
+ 
+ 	return resp
+ }
