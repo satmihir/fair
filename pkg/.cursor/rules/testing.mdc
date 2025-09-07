@@ -1,0 +1,92 @@
+---
+description: Guidelines for writing quality go tests
+alwaysApply: true
+---
+
+This document defines how to write tests that fail fast on real bugs and protect behavior against future changes. Follow it exactly—both humans and code-generation tools.
+
+# Principles
+
+- Behavior over lines. Tests must assert observable behavior (outputs, state changes, I/O, timing guarantees), not just execute lines.
+- Small, specific, reproducible. Each test isolates one behavior, has fixed inputs, fixed clocks/seeds, and a single reason to fail.
+- Defense in depth. Combine example tests, property tests, and boundary/negative cases for every public function.
+- Change resilience. Prefer assertions on externally observable contracts (not private fields or transient implementation details).
+- Don't take the current code as a gospel. If you find bugs or opportunity to refactor, CALL IT OUT. In no case will you just write a test to assert a known bug. It's okay and in fact ESSENTIAL to halt testing to fix bugs.
+
+# Test Shape and Naming
+
+- AAA structure: Arrange / Act / Assert with blank lines between blocks.
+- Name: Test<Subject>_<Behavior>_<Condition> (e.g., TestLimiter_Allow_RespectsBurst).
+- One assertion block per behavior. If multiple assertions, they must describe facets of the same behavior.
+- Use `require` instead of `assert` for go tests so tests fail fast and avoid red herrings.
+
+# Determinism Requirements
+
+Always eliminate nondeterminism:
+- Clocks: inject a fake clock; never call time.Now() directly in tests or code that can be clock-injected.
+- Randomness: use a seeded PRNG with a fixed seed passed into the unit under test.
+- Concurrency: deterministically gate goroutines (channels, barriers); avoid sleep-based timing.
+- I/O: replace external I/O with fakes/mocks; assert on interactions (calls, arguments).
+
+MUST: Tests must pass identically on repeated runs (N≥100).
+
+# Assertion Quality Rubric
+
+Prefer strong, behavioral assertions:
+- Exact outputs: values, lengths, order, floating tolerance (ε) when applicable.
+- State changes: before/after invariants; counters; visible side effects.
+- Error semantics: presence/absence, type/class, message is not a contract (avoid brittle string matches).
+- Timing/TTL: boundaries at t == expiry, t == expiry-ε, t == expiry+ε using fake clock.
+
+## DO
+- Check all observable fields relevant to the behavior.
+- Assert negative space (what must not happen).
+
+## DO NOT
+- Only assert that “no error occurred.”
+- Assert internal private fields or incidental logs.
+
+# Edge-Case Catalog (cover all)
+
+For every public function, include at least one test for each applicable case:
+- Boundaries: 0, 1, n-1, n, n+1, empty/non-empty, min/max values.
+- Ordering: sorted, reverse, equal elements, duplicates.
+- Idempotence: calling twice yields same state/result.
+- Nullability: nil receiver/args where allowed; zero-value structs.
+- Error paths: injected dependency failure, timeouts, cancellation.
+- TTL/Expiry: just before boundary, at boundary, just after.
+- Concurrency: simultaneous calls (contention), cancellation paths, channel close.
+
+# Table-Driven Tests (Go)
+
+Use table-driven style to enumerate cases succinctly when possible. Each row asserts all expected facets.
+
+# Concurrency & Cancellation
+
+When functions involve goroutines/channels/contexts:
+
+- Inject a context and assert cancellation paths trigger promptly.
+- Use select with deadlines on test side to avoid hangs.
+- Assert no goroutine leaks: sample runtime.NumGoroutine() before/after in tests guarded by build tag race when feasible.
+- Prefer channel fakes over time-based waits.
+
+# Fixtures & Fakes
+
+- Keep fixtures local to the test when small; otherwise create helpers under testutil.
+- Fakes must record calls and allow forced failures (e.g., fakeStore.FailOnPut(err)).
+- Reset global state after each test; use t.Cleanup.
+- When designing a global helper for fixtures, see what's available first and try to consolidate/refactor instead of duplicating logic as far as possible.
+
+# Failure Messages
+
+- Failure text must aid diagnosis:
+- State inputs, observed, expected, and why (contract).
+- For properties, include the shrunk counterexample.
+- Avoid vague messages like “assert failed.”
+
+# Structure & Layout
+
+- Place unit tests adjacent to the package (*_test.go).
+- Keep one behavior per test; split when branches diverge.
+- Use t.Helper() in helpers to keep failure locations accurate.
+- Use t.Parallel() only when isolation is guaranteed.
