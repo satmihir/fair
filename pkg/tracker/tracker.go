@@ -90,6 +90,9 @@ func NewFairnessTrackerWithClockAndTicker(trackerConfig *config.FairnessTrackerC
 // NewFairnessTracker creates a FairnessTracker using the real system clock and
 // ticker.
 func NewFairnessTracker(trackerConfig *config.FairnessTrackerConfig) (*FairnessTracker, error) {
+	if trackerConfig == nil {
+		return nil, NewFairnessTrackerError(nil, "Configuration cannot be nil")
+	}
 	clk := utils.NewRealClock()
 	ticker := utils.NewRealTicker(trackerConfig.RotationFrequency)
 	return NewFairnessTrackerWithClockAndTicker(trackerConfig, clk, ticker)

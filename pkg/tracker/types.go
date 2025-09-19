@@ -27,6 +27,9 @@ func (bl *FairnessTrackerBuilder) BuildWithDefaultConfig() (*FairnessTracker, er
 
 // BuildWithConfig builds a tracker using the supplied configuration.
 func (bl *FairnessTrackerBuilder) BuildWithConfig(configuration *config.FairnessTrackerConfig) (*FairnessTracker, error) {
+	if configuration == nil {
+		return nil, NewFairnessTrackerError(nil, "Configuration cannot be nil")
+	}
 	return NewFairnessTracker(configuration)
 }
 

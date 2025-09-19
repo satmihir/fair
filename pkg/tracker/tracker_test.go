@@ -2,6 +2,7 @@ package tracker
 
 import (
 	"context"
+	"github.com/satmihir/fair/pkg/testutils"
 	"testing"
 	"time"
 
@@ -63,4 +64,21 @@ func TestRotation(t *testing.T) {
 	trk.rotationLock.RUnlock()
 
 	assert.True(t, secID >= 2)
+}
+
+func TestFairnessTrackerBuilder_BuildWithConfig(t *testing.T) {
+	trkB := NewFairnessTrackerBuilder()
+	trkDefault, err := trkB.BuildWithDefaultConfig()
+	assert.NoError(t, err)
+	defer trkDefault.Close()
+
+	trkWithNilConfig, errWithNilConfig := trkB.BuildWithConfig(nil)
+	assert.Error(t, errWithNilConfig)
+	testutils.TestError(t, &FairnessTrackerError{}, errWithNilConfig, "Configuration cannot be nil", nil)
+	assert.Nil(t, trkWithNilConfig)
+
+	trkWithNilConfig, errWithNilConfig = NewFairnessTracker(nil)
+	assert.Error(t, errWithNilConfig)
+	testutils.TestError(t, &FairnessTrackerError{}, errWithNilConfig, "Configuration cannot be nil", nil)
+	assert.Nil(t, trkWithNilConfig)
 }
