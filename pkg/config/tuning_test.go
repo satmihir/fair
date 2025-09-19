@@ -27,3 +27,9 @@ func TestDefaultStructureConfig(t *testing.T) {
 	assert.Equal(t, conf.Pi*25, float64(1))
 	assert.Equal(t, conf.Pd*25*1000, float64(1))
 }
+
+func TestGenerateTunedStructureConfigZeroTolerable(t *testing.T) {
+    conf := GenerateTunedStructureConfig(1000, 1000, 0)
+    // Pi should be computed as 1 / defaultTolerableBadRequestsPerBadFlow
+    assert.Equal(t, conf.Pi*float64(defaultTolerableBadRequestsPerBadFlow), float64(1))
+}

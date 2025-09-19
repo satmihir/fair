@@ -93,6 +93,12 @@ func DefaultFairnessTrackerConfig() *FairnessTrackerConfig {
 //   - tolerableBadRequestsPerBadFlow: number of failed requests tolerated before
 //     a flow is fully blocked.
 func GenerateTunedStructureConfig(expectedClientFlows, bucketsPerLevel, tolerableBadRequestsPerBadFlow uint32) *FairnessTrackerConfig {
+	// If caller passes 0, fall back to the sane default and warn.
+    if tolerableBadRequestsPerBadFlow == 0 {
+        log.Printf("tolerableBadRequestsPerBadFlow=0 is invalid; falling back to default %d", defaultTolerableBadRequestsPerBadFlow)
+        tolerableBadRequestsPerBadFlow = defaultTolerableBadRequestsPerBadFlow
+    }
+	
 	M := uint32(math.Ceil(float64(expectedClientFlows) * percentBadClientFlows))
 	L := CalculateL(bucketsPerLevel, M, lowProbability)
 	if L < minL {
