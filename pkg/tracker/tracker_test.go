@@ -82,3 +82,12 @@ func TestFairnessTrackerBuilder_BuildWithConfig(t *testing.T) {
 	testutils.TestError(t, &FairnessTrackerError{}, errWithNilConfig, "Configuration cannot be nil", nil)
 	assert.Nil(t, trkWithNilConfig)
 }
+func TestNewFairnessTrackerWithClockAndTicker_NilConfig(t *testing.T) {
+	// Passing a nil config should return an error rather than causing a panic.
+	ft, err := NewFairnessTrackerWithClockAndTicker(nil, nil, nil)
+
+	assert.Nil(t, ft)
+	if assert.Error(t, err) {
+		assert.Contains(t, err.Error(), "trackerConfig must not be nil")
+	}
+}
