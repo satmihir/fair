@@ -16,6 +16,7 @@ var (
 type Logger interface {
 	Printf(format string, args ...any)
 	Print(args ...any)
+	Println(args ...any)
 }
 
 type stdLogger struct {
@@ -34,6 +35,10 @@ func (s *stdLogger) Printf(format string, args ...any) {
 
 func (s *stdLogger) Print(args ...any) {
 	s.l.Print(args...)
+}
+
+func (s *stdLogger) Println(args ...any) {
+	s.l.Println(args...)
 }
 
 // Replaces default logger with provided logger

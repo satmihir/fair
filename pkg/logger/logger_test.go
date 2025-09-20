@@ -21,6 +21,10 @@ func (t *testLogger) Print(args ...any) {
 	fmt.Print(args...)
 }
 
+func (t *testLogger) Println(args ...any) {
+	fmt.Println(args...)
+}
+
 func TestSetLogger(t *testing.T) {
 	tests := []struct {
 		name string // description of this test case
