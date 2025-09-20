@@ -60,7 +60,7 @@ func Print(args ...any) {
 	GetLogger().Print(args...)
 }
 
-// Printf uses whichever logger is currently
+// Printf uses whichever logger is currently set
 func Printf(format string, args ...any) {
 	GetLogger().Printf(format, args...)
 }
