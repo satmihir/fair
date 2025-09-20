@@ -36,6 +36,12 @@ type FairnessTracker struct {
 // provided clock and ticker. It is primarily used for tests and simulations
 // where time needs to be controlled.
 func NewFairnessTrackerWithClockAndTicker(trackerConfig *config.FairnessTrackerConfig, clock utils.IClock, ticker utils.ITicker) (*FairnessTracker, error) {
+	// Guard clause: fail fast and return a clear error when caller passes a nil config.
+	// Without this, the function dereferences fields on trackerConfig (e.g. trackerConfig.IncludeStats)
+	// below and will panic with "runtime error: invalid memory address or nil pointer dereference".
+	if trackerConfig == nil {
+		return nil, NewFairnessTrackerError(nil, "trackerConfig must not be nil")
+	}
 	st1, err := data.NewStructureWithClock(trackerConfig, 1, trackerConfig.IncludeStats, clock)
 	if err != nil {
 		return nil, NewFairnessTrackerError(err, "Failed to create a structure")
