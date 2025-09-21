@@ -5,6 +5,12 @@ This document outlines the design for serializing FAIR’s core data structures,
 
 This document doesn't capture details about how the serialized states from other hosts are merged/considered in the decision making.
 
+## Glossary
+
+What's a Bucket? \
+The most basic data-structure in FAIR implementatin is a bucket - this contains a probability and a last-seen time. The probability is decayed (or) improved based on some factors. For the life-time of the Structure, a client - identified by the client-ID, consistently lands on a few buckets (based on seed). The final decision is made on top of the bucket probabilities.
+
+
 ## Requirements
 ### Functional
 
@@ -61,7 +67,7 @@ enum HostSquashingFunction {
 
 message TrackerCfg {
   int64 config_guid = 1; // Unique per tracker config
-  int64 config_version = 2; // Montonically increments per version of tracker config
+  int64 config_version = 2; // Monotonically increments per version of tracker config
   uint32 m = 3;
   uint32 l = 4;
   double pi = 5;
@@ -104,7 +110,7 @@ message FairSt {
   // int32 version_num = 1; May be do this only if necessary
   repeated TrackerCfg cfgs = 2;
   repeated FairRunTimeData data = 3;
-  HostMeta meta = 3;
+  HostMeta meta = 4;
 }
 ```
 
