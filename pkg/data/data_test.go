@@ -163,16 +163,17 @@ func TestAdjustProbability(t *testing.T) {
 	res := adjustProbability(0.90, .01, 10)
 	assert.Equal(t, res, 0.89991000449985)
 }
-//Explicitly test nil config case
+
+// Explicitly test nil config case
 func TestValidateStructConfig_NilConfig(t *testing.T) {
-    err := validateStructureConfig(nil)
+	err := validateStructureConfig(nil)
 
-    // Expect an error instead of panic
-    assert.Error(t, err)
+	// Expect an error instead of panic
+	assert.Error(t, err)
 
-    // Ensure we wrapped it in DataError (consistent with other failures)
-    assert.IsType(t, &DataError{}, err)
+	// Ensure we wrapped it in DataError (consistent with other failures)
+	assert.IsType(t, &DataError{}, err)
 
-    // Error message should clearly state the root cause
-    assert.Contains(t, err.Error(), "cannot be nil")
+	// Error message should clearly state the root cause
+	assert.Contains(t, err.Error(), "cannot be nil")
 }
