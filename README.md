@@ -67,6 +67,28 @@ trkB.SetRotationFrequency(1 * time.Minute)
 trk, err := trkB.Build()
 defer trk.Close()
 ```
+Enabling Stats and Debugging Bucket Details
+To collect and inspect per-bucket statistics for debugging, set IncludeStats to true in your tracker config:
+
+```go
+
+conf := config.DefaultFairnessTrackerConfig() //default IncludeStats=false
+conf.IncludeStats = true
+tracker, _ := tracker.NewFairnessTracker(conf)
+```
+
+ResultStats contains probabilities and other debugging information collected while registering a request.
+After registering requests or reporting outcomes, you can access bucket stats from the result:
+
+```go
+result := tracker.RegisterRequest(ctx, clientID)
+if result.Stats != nil {
+    log.Printf("Bucket: %v, Requests: %d, Throttled: %d", 
+        result.Stats.BucketID, result.Stats.RequestCount, result.Stats.ThrottledCount)
+}
+```
+
+This helps you debug fairness decisions and monitor workload behavior.
 
 ### Registering Requests
 
