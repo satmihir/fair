@@ -7,6 +7,7 @@ import (
 
 	"github.com/satmihir/fair/pkg/config"
 	"github.com/satmihir/fair/pkg/data"
+	"github.com/satmihir/fair/pkg/logger"
 	"github.com/satmihir/fair/pkg/request"
 	"github.com/satmihir/fair/pkg/utils"
 )
@@ -44,11 +45,13 @@ func NewFairnessTrackerWithClockAndTicker(trackerConfig *config.FairnessTrackerC
 	}
 	st1, err := data.NewStructureWithClock(trackerConfig, 1, trackerConfig.IncludeStats, clock)
 	if err != nil {
+		logger.Printf("error in creating first tracker : %v", err)
 		return nil, NewFairnessTrackerError(err, "Failed to create a structure")
 	}
 
 	st2, err := data.NewStructureWithClock(trackerConfig, 2, trackerConfig.IncludeStats, clock)
 	if err != nil {
+		logger.Printf("error in creating second tracker : %v", err)
 		return nil, NewFairnessTrackerError(err, "Failed to create a structure")
 	}
 
@@ -89,7 +92,6 @@ func NewFairnessTrackerWithClockAndTicker(trackerConfig *config.FairnessTrackerC
 			}
 		}
 	}()
-
 	return ft, nil
 }
 

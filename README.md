@@ -117,6 +117,18 @@ trk, err := trkB.BuildWithConfig(conf)
 defer trk.Close()
 ```
 
+## Logging
+Fair provides logs present which by default are disabled.
+package `logger` exposes an interface with `GetLogger` and `SetLogger` methods.
+
+It also provides an out of the box logger based on std lib. Here's how you can enable it:
+```go
+import (
+	"github.com/satmihir/fair/pkg/logger"
+)
+logger.SetLogger(logger.NewStdLogger())
+```
+
 ## Development
 
 Run tests and static analysis locally with:
