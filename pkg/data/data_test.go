@@ -2,6 +2,7 @@ package data
 
 import (
 	"context"
+	"math"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -159,9 +160,70 @@ func TestEndToEnd(t *testing.T) {
 	assert.True(t, resp.ShouldThrottle)
 }
 
+// TestAdjustProbability verifies that the adjustProbability function
+// correctly applies exponential decay across a range of scenarios.
+//
+// Covered cases:
+//  1. No decay occurs when lambda is zero (decay rate = 0).
+//  2. No decay occurs when deltaMs is zero (no time elapsed).
+//  3. Large deltaMs values push probability toward zero.
+//  4. A starting probability of zero always stays zero.
+//  5. Small positive decay applies correctly for short time intervals.
 func TestAdjustProbability(t *testing.T) {
-	res := adjustProbability(0.90, .01, 10)
-	assert.Equal(t, res, 0.89991000449985)
+	tests := []struct {
+        name     string
+        prob     float64
+        lambda   float64
+        deltaMs  uint64
+        expected float64
+    }{
+        {
+            name:     "No decay when lambda is 0",
+            prob:     0.8,
+            lambda:   0,
+            deltaMs:  10000,
+            expected: 0.8,
+        },
+        {
+            name:     "No decay when deltaMs is 0",
+            prob:     0.6,
+            lambda:   0.5,
+            deltaMs:  0,
+            expected: 0.6,
+        },
+        {
+            name:     "Decay approaches 0 for large deltaMs",
+            prob:     0.9,
+            lambda:   1.0,
+            deltaMs:  1000000, // very large time
+            expected: 0.0,     // should be nearly 0
+        },
+        {
+            name:     "Probability stays 0 if starting from 0",
+            prob:     0,
+            lambda:   1.0,
+            deltaMs:  5000,
+            expected: 0,
+        },
+        {
+            name:     "Small decay with short delta",
+            prob:     1.0,
+            lambda:   0.1,
+            deltaMs:  100,
+            expected: 1.0 * math.Exp(-0.1*0.1), // e^(-0.01)
+        },
+    }
+
+    for _, tt := range tests {
+        t.Run(tt.name, func(t *testing.T) {
+            got := adjustProbability(tt.prob, tt.lambda, tt.deltaMs)
+
+            // For float comparisons use tolerance
+            if math.Abs(got-tt.expected) > 1e-6 {
+                t.Errorf("adjustProbability() = %v, want %v", got, tt.expected)
+            }
+        })
+    }
 }
 
 // Explicitly test nil config case
