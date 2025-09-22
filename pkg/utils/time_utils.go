@@ -34,6 +34,7 @@ func (c *Clock) Sleep(duration time.Duration) {
 type ITicker interface {
 	C() <-chan time.Time
 	Stop()
+	Reset(time.Duration)
 }
 
 // Ticker wraps time.Ticker to satisfy the ITicker interface.
@@ -56,4 +57,10 @@ func (t *Ticker) C() <-chan time.Time {
 // Stop stops the ticker.
 func (t *Ticker) Stop() {
 	t.ticker.Stop()
+}
+
+// Reset stops ticker and reset to specified period
+// Next ticker arries after new period elapses
+func (t *Ticker) Reset(duration time.Duration) {
+	t.ticker.Reset(duration)
 }

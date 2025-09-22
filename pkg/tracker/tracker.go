@@ -4,6 +4,7 @@ import (
 	"context"
 	"log"
 	"sync"
+	"time"
 
 	"github.com/satmihir/fair/pkg/config"
 	"github.com/satmihir/fair/pkg/data"
@@ -140,4 +141,10 @@ func (ft *FairnessTracker) ReportOutcome(ctx context.Context, clientIdentifier [
 func (ft *FairnessTracker) Close() {
 	close(ft.stopRotation)
 	ft.ticker.Stop()
+}
+
+// ResetRotationFrequency stops ticker and reset to specified period
+// Next ticker arries after new period elapses
+func (ft *FairnessTracker) ResetRotationFrequency(duration time.Duration) {
+	ft.ticker.Reset(duration)
 }

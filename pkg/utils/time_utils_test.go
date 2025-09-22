@@ -30,4 +30,20 @@ func TestTicker(t *testing.T) {
 	}
 
 	assert.True(t, found)
+
+	ticker = NewRealTicker(50 * time.Millisecond)
+	instance := 0
+	timeoutChan := time.After(100 * time.Millisecond)
+	ticker.Reset(10 * time.Millisecond)
+loop:
+	for {
+		select {
+		case <-ticker.C():
+			instance++
+		case <-timeoutChan:
+			break loop
+		}
+	}
+
+	assert.True(t, instance > 3)
 }
