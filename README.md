@@ -124,6 +124,12 @@ id := []byte("client_id")
 trk.ReportOutcome(ctx, id, request.OutcomeSuccess)
 ```
 
+### Change Rotation Frequency
+While rotation frequency can be setup using `SetRotationFrequency` method during initialization, you can also change it during runtime using `ResetRotationFrequency`. Here's how:
+```go
+trk.ResetRotationFrequency(10 * time.Minute)
+```
+
 ## Tuning
 
 You can use the `GenerateTunedStructureConfig` to tune the tracker without directly touching the algorithm parameters. It exposes a simple interface where you have to pass the following things based on your application logic and scaling requirements.
