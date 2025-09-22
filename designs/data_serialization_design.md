@@ -1,23 +1,20 @@
 # FAIR Data Serialization Design
 ## Overview
 
-This document outlines the design for serializing FAIR’s core data structures, which is essential for enabling FAIR as a distributed system. It also covers how serialized data is expected to be consumed and synchronized across hosts. 
+This document outlines the design for serializing FAIR’s core data structures, which is essential for enabling FAIR as a distributed system. It doesn't cover how the serialized data is expected to consumed across hosts.
 
-This document doesn't capture details about how the serialized states from other hosts are merged/considered in the decision making.
 
-## Glossary
+## Glossary 
 
 What's a Bucket? \
-The most basic data-structure in FAIR implementatin is a bucket - this contains a probability and a last-seen time. The probability is decayed (or) improved based on some factors. For the life-time of the Structure, a client - identified by the client-ID, consistently lands on a few buckets (based on seed). The final decision is made on top of the bucket probabilities.
-
+The most basic data-structure in FAIR implementatin is a bucket - this contains a probability and a last-seen time. The probability is increased (or) decreased based on success/failure and it decays over time by a configurable factor. For the life-time of the Structure, a client - identified by the client-ID, consistently lands on a few buckets (based on seed). The final decision is made on top of the bucket probabilities.
 
 ## Requirements
 ### Functional
-
 - **Complete**: Serialize the full data structure, including:
     - Multi-level bucket data (probabilities, timestamps)
-    -  Configuration parameters
-    - MurmurHash seed
+    - Configuration parameters
+    - Algorithm / Seed
     - Metadata (ID, flags)
 
 - **Portable**: Work across platforms, Go versions, and FAIR versions, with proper versioning.
@@ -30,8 +27,8 @@ The most basic data-structure in FAIR implementatin is a bucket - this contains 
 - **Maintainability**: Clear versioning and schema upgrade path.
 - **Compatibility**: Backward and forward compatibility.
 
-## Serialization Format Selection
-
+## Serialization - Design
+### Options
 Rejected options: JSON, XML, and other text formats — too verbose. \
 Custom serialization: Considered, but unnecessary given current requirements. Can revisit if protobuf overhead becomes a concern. \
 Chosen option: Protocol Buffers (protobuf), due to:
@@ -49,20 +46,13 @@ The schema has two broad parts:
 
 Accessing `State` requires the matching `Config` and `Consts`. Multiple tracker configs may exist simultaneously (multi-tenant).
 
-## Schema v1 (High-level)
+### Schema v1 (High-level)
 ```
 package fair.data.v1;
 
 enum LevelSquashingFunction {
-  LEVEL_SQUASHING_FUNCTION_UNSPECIFIED = 0;
-  LEVEL_SQUASHING_FUNCTION_MIN = 1;
-  LEVEL_SQUASHING_FUNCTION_MEAN = 2;
-}
-
-enum HostSquashingFunction {
-  HOST_SQUASHING_FUNCTION_UNSPECIFIED = 0;
-  HOST_SQUASHING_FUNCTION_LOGIC1 = 1;
-  HOST_SQUASHING_FUNCTION_LOGIC2 = 2;
+  LEVEL_SQUASHING_FUNCTION_MIN = 0;
+  LEVEL_SQUASHING_FUNCTION_MEAN = 1;
 }
 
 message TrackerCfg {
@@ -75,7 +65,6 @@ message TrackerCfg {
   double lambda = 7;
   google.protobuf.Duration rotation_frequency = 8;
   LevelSquashingFunction level_squash_fn = 9;
-  HostSquashingFunction host_squash_fn = 10;
 }
 
 message Bucket {
@@ -91,8 +80,17 @@ message FairData {
   repeated Level levels = 1;
 }
 
+enum Algorithm {
+  MURMURHASH_32b = 0;
+}
+
+message AlgoParams{
+  Algorithm algorithm = 1;
+  uint32 murmur_seed = 2;
+}
+
 message FairRunConsts {
-  uint32 murmur_seed = 1;
+  AlgoParams algoparams = 1;
   string ref_guid = 2;
 }
 
@@ -106,8 +104,7 @@ message FairRunTimeData {
   FairData data = 2;
 }
 
-message FairSt {
-  // int32 version_num = 1; May be do this only if necessary
+message FairStructure {
   repeated TrackerCfg cfgs = 2;
   repeated FairRunTimeData data = 3;
   HostMeta meta = 4;
@@ -136,7 +133,7 @@ func DeserializeStructure(data []byte) (*Structure, error)
 - Support human readable dumping (JSON)
 
 ### Phase 3: Enhancements
-- Optional compression (gzip/lz4).
+- Optional compression (gzip/lz4/zstd).
 - Checksums for integrity.
 - Migration utilities for schema upgrades.
 
@@ -177,13 +174,3 @@ Logging: events, errors, warnings (e.g., slow serialization).
 3) External cache (Redis) for global state.
 4) gRPC + service discovery for host coordination.
 5) Warm-up mechanisms for new hosts.
-
-## Thoughts on State Syncing
-Two approaches considered:
-1) Independent host state
-    - Each host keeps separate shadow structures for other hosts.
-    - Simple but expensive (memory + fan-out peformance).
-2) Seed Coordination
-    - Predictable seeds via GetNextSeed() per time window.
-    - Hosts converge on consistent bucket mappings.
-    - More efficient but requires careful design to avoid feedback loops.
