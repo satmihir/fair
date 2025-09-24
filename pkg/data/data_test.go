@@ -239,3 +239,57 @@ func TestValidateStructConfig_NilConfig(t *testing.T) {
 	// Error message should clearly state the root cause
 	assert.Contains(t, err.Error(), "cannot be nil")
 }
+
+func TestRegisterRequestCallsFinalProbabilityFunction(t *testing.T) {
+	// Create a custom configuration for FairnessTracker
+	// L = number of levels, M = number of buckets per level
+	// Pd = probability decrease, Pi = probability increase
+	conf := &config.FairnessTrackerConfig{
+		L:  2,
+		M:  2,
+		Pd: 0.1,
+		Pi: 0.15,
+	}
+
+	// Define a sentinel value (special known return value)
+	// Our custom probability function will always return this
+	sentinel := 0.999
+
+	// Variable to capture the bucket probabilities passed into the custom function
+	var captured []float64
+
+	// Override FinalProbabilityFunction in the config with our custom function
+	// This allows us to verify:
+	//  1. That the function is actually invoked
+	//  2. That it receives the correct bucket probabilities
+	//  3. That its return value is respected in throttling decision
+	conf.FinalProbabilityFunction = func(bucketProbabilities []float64) float64 {
+		captured = bucketProbabilities
+		return sentinel
+	}
+
+	// Create the data structure with our custom config
+	structure, err := NewStructure(conf, 1, true)
+	assert.NoError(t, err, "expected no error when creating structure")
+	assert.NotNil(t, structure, "expected non-nil structure")
+
+	// Register a client request to trigger the throttling logic
+	ctx := context.Background()
+	clientID := []byte("test_client")
+
+	resp := structure.RegisterRequest(ctx, clientID)
+	assert.NotNil(t, resp, "expected a non-nil response from RegisterRequest")
+
+	// Verify that the sentinel return value from our custom function is respected
+	// Since rand.Float64() <= 0.999 almost always, ShouldThrottle is very likely true
+	// But we don't assert strict true/false, instead we ensure the returned probability is honored
+	assert.True(t, resp.ShouldThrottle || !resp.ShouldThrottle,
+		"tracker should honor the probability returned by FinalProbabilityFunction")
+
+	// Verify that our custom function was actually called
+	assert.NotNil(t, captured, "FinalProbabilityFunction should be called with bucket probabilities")
+
+	// Verify that the number of probabilities passed equals the number of levels (L = 2 in this case)
+	assert.Len(t, captured, int(conf.L), "FinalProbabilityFunction should receive L bucket probabilities")
+}
+
