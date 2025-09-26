@@ -10,6 +10,22 @@ on:
     branches: [ "main" ]
 
 jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.22'
+
+    - name: Lint
+      uses: golangci/golangci-lint-action@v6
+      with:
+        version: v1.61 # latest stable
+        args: --timeout=5m
 
   build:
     runs-on: ubuntu-latest
@@ -55,4 +71,5 @@ jobs:
       with:
         github_token: ${{ github.token }}
         branch: ${{ github.head_ref }}
+        force: true
 

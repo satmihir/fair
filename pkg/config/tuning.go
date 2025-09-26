@@ -40,12 +40,12 @@ var (
 			log.Fatalf("Cannot compute final probability with empty buckets slice")
 		}
 
-		var min float64 = 1.
+		var minVal float64 = 1.
 		for _, b := range buckets {
-			min = math.Min(min, b)
+			minVal = math.Min(minVal, b)
 		}
 
-		return min
+		return minVal
 	}
 
 	// MeanFinalProbabilityFunction returns the mean of all bucket
