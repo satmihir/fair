@@ -223,7 +223,9 @@ func TestPrint_ConcurrentAccess(t *testing.T) {
 
 	// Assert
 	var buf bytes.Buffer
-	buf.ReadFrom(reader)
+	if _, err := buf.ReadFrom(reader); err != nil {
+		t.Fatalf("failed to read: %v", err)
+	}
 	output := buf.String()
 	lines := strings.Split(strings.TrimSpace(output), "\n")
 	expectedTotal := numGoroutines * messagesPerGoroutine
@@ -255,6 +257,7 @@ func TestSetLogger(t *testing.T) {
 			name: "switching with stdout logger",
 			l:    newTestLogger(),
 			validate: func(t *testing.T) {
+				t.Helper()
 				oldStdout := os.Stdout
 				testLog := "testing if logs are working"
 
@@ -267,7 +270,9 @@ func TestSetLogger(t *testing.T) {
 				os.Stdout = oldStdout
 
 				var buf bytes.Buffer
-				buf.ReadFrom(reader)
+				if _, err := buf.ReadFrom(reader); err != nil {
+					t.Fatalf("failed to read: %v", err)
+				}
 				output := buf.String()
 
 				if output != testLog {
@@ -279,6 +284,7 @@ func TestSetLogger(t *testing.T) {
 			name: "passing a nil logger",
 			l:    nil,
 			validate: func(t *testing.T) {
+				t.Helper()
 				oldStdout := os.Stdout
 				testLog := "testing if logs are working"
 
@@ -291,7 +297,9 @@ func TestSetLogger(t *testing.T) {
 				os.Stdout = oldStdout
 
 				var buf bytes.Buffer
-				buf.ReadFrom(reader)
+				if _, err := buf.ReadFrom(reader); err != nil {
+					t.Fatalf("failed to read: %v", err)
+				}
 				output := buf.String()
 
 				if len(output) > 0 {

@@ -9,7 +9,7 @@ import (
 
 // TestError verifies that an error implements the expected behavior, message and
 // wrapped error. It is a helper used across unit tests.
-func TestError(t *testing.T, expectedType interface{}, errInstance error, expectedMessage string, wrappedErr error) {
+func TestError(t *testing.T, _ interface{}, errInstance error, expectedMessage string, wrappedErr error) {
 	t.Helper()
 
 	_, ok := errInstance.(interface{ Unwrap() error })
