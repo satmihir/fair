@@ -7,7 +7,7 @@ This document outlines the design for serializing FAIR’s core data structures,
 ## Glossary 
 
 What's a Bucket? \
-The most basic data-structure in FAIR implementatin is a bucket - this contains a probability and a last-seen time. The probability is increased (or) decreased based on success/failure and it decays over time by a configurable factor. For the life-time of the Structure, a client - identified by the client-ID, consistently lands on a few buckets (based on seed). The final decision is made on top of the bucket probabilities.
+The most basic data-structure in FAIR implementation is a bucket - this contains a probability and a last-seen time. The probability is increased (or) decreased based on success/failure and it decays over time by a configurable factor. For the life-time of the Structure, a client - identified by the client-ID, consistently lands on a few buckets (based on seed). The final decision is made on top of the bucket probabilities.
 
 ## Requirements
 ### Functional
@@ -44,7 +44,7 @@ The schema has two broad parts:
    - Consts: Initialized once, updated periodically (e.g., hash seed).
    - State: Updated frequently on the hot path (bucket data).
 
-Accessing `State` requires the matching `Config` and `Consts`. Multiple tracker configs may exist simultaneously (multi-tenant).
+Accessing `State` requires the matching `Config` and `Consts`. Multiple tracker configs may exist simultaneously.
 
 ### Schema v1 (High-level)
 ```
@@ -56,7 +56,7 @@ enum LevelSquashingFunction {
 }
 
 message TrackerCfg {
-  int64 config_guid = 1; // Unique per tracker config
+  int64 tracker_id = 1; // Unique per tracker config
   int64 config_version = 2; // Monotonically increments per version of tracker config
   uint32 m = 3;
   uint32 l = 4;
@@ -91,7 +91,6 @@ message AlgoParams{
 
 message FairRunConsts {
   AlgoParams algoparams = 1;
-  string ref_guid = 2;
 }
 
 message HostMeta {
@@ -104,15 +103,15 @@ message FairRunTimeData {
   FairData data = 2;
 }
 
-message FairStructure {
-  repeated TrackerCfg cfgs = 2;
-  repeated FairRunTimeData data = 3;
-  HostMeta meta = 4;
+// FairStruct - wraps the configuration and the run-time consts & data associated with a tracker.
+message FairStruct {
+  TrackerCfg cfg = 1;
+  FairRunTimeData data = 2;
+  HostMeta meta = 3;
 }
 ```
 
-The top-level struct contains a list of `TrackerCfgs`, the Runtime data is encoded using `FairRunTimeData` - which contains the consts and the data. Each unit of the run-time data contains a link `ref_guid` which refers to the config_guid and version. The structure also include a `HostMeta` field that includes information about the host.
-
+`FairStruct` wraps a tracker config and the associated consts and data. 
 
 ## Implementation Plan
 ### Phase 1: Core
