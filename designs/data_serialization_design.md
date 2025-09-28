@@ -39,12 +39,12 @@ Chosen option: Protocol Buffers (protobuf), due to:
 - Schema Design
 
 The schema has two broad parts:
-1)  Config (TrackerCfg) — defined by customers, drives tracker creation.
+1) Config (TrackerCfg) — defined by customers, drives tracker creation.
 2) Runtime Data — driven by traffic and execution:
-   - Consts: Initialized once, updated periodically (e.g., hash seed).
+   - Parameters: Initialized once, updated periodically (e.g., hash seed).
    - State: Updated frequently on the hot path (bucket data).
 
-Accessing `State` requires the matching `Config` and `Consts`. Multiple tracker configs may exist simultaneously.
+Accessing `State` requires the matching `Config` and `Parameters`. Multiple tracker configs may exist simultaneously.
 
 ### Schema v1 (High-level)
 ```
@@ -81,7 +81,7 @@ message FairData {
 }
 
 enum Algorithm {
-  MURMURHASH_32b = 0;
+  MURMURHASH_32 = 0;
 }
 
 message AlgoParams{
@@ -89,7 +89,7 @@ message AlgoParams{
   uint32 murmur_seed = 2;
 }
 
-message FairRunConsts {
+message FairRunParameters {
   AlgoParams algoparams = 1;
 }
 
@@ -98,20 +98,20 @@ message HostMeta {
   uint64 serialized_at_ms = 2;
 }
 
-message FairRunTimeData {
-  FairRunConsts runtime = 1;
+message FairRuntimeData {
+  FairRunParameters runtime = 1;
   FairData data = 2;
 }
 
-// FairStruct - wraps the configuration and the run-time consts & data associated with a tracker.
+// FairStruct - wraps the configuration and the run-time parameters & data associated with a tracker.
 message FairStruct {
   TrackerCfg cfg = 1;
-  FairRunTimeData data = 2;
+  FairRuntimeData data = 2;
   HostMeta meta = 3;
 }
 ```
 
-`FairStruct` wraps a tracker config and the associated consts and data. 
+`FairStruct` wraps a tracker config and the associated parameters and data. 
 
 ## Implementation Plan
 ### Phase 1: Core
