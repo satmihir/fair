@@ -2,13 +2,14 @@ package data
 
 import (
 	"context"
-	"math"
-	"testing"
-
-	"github.com/stretchr/testify/assert"
-
 	"github.com/satmihir/fair/pkg/config"
 	"github.com/satmihir/fair/pkg/request"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"math"
+	"math/rand"
+	"testing"
+	"time"
 )
 
 func TestValidateStructConfig(t *testing.T) {
@@ -214,9 +215,9 @@ func TestAdjustProbability(t *testing.T) {
         },
     }
 
-    for _, tt := range tests {
-        t.Run(tt.name, func(t *testing.T) {
-            got := adjustProbability(tt.prob, tt.lambda, tt.deltaMs)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := adjustProbability(tt.prob, tt.lambda, tt.deltaMs)
 
             // For float comparisons use tolerance
             if math.Abs(got-tt.expected) > 1e-6 {
@@ -293,3 +294,77 @@ func TestRegisterRequestCallsFinalProbabilityFunction(t *testing.T) {
 	assert.Len(t, captured, int(conf.L), "FinalProbabilityFunction should receive L bucket probabilities")
 }
 
+func TestReportOutcomeClampsProbability(t *testing.T) {
+	// Use a fixed seed for deterministic murmur hash
+	rand.Seed(1)
+	defer rand.Seed(time.Now().UnixNano())
+
+	testCases := []struct {
+		name         string
+		initialProb  float64
+		outcome      request.Outcome
+		pi           float64
+		pd           float64
+		expectedProb float64
+	}{
+		{
+			name:         "Probability does not exceed 1.0 on failure",
+			initialProb:  0.9,
+			outcome:      request.OutcomeFailure,
+			pi:           0.2, // Pi > Pd
+			pd:           0.1,
+			expectedProb: 1.0,
+		},
+		{
+			name:         "Probability does not go below 0.0 on success",
+			initialProb:  0.1,
+			outcome:      request.OutcomeSuccess,
+			pi:           0.3, // Pi > Pd
+			pd:           0.2,
+			expectedProb: 0.0,
+		},
+		{
+			name:         "Probability clamps at 1.0 exactly",
+			initialProb:  1.0,
+			outcome:      request.OutcomeFailure,
+			pi:           0.2, // Pi > Pd
+			pd:           0.1,
+			expectedProb: 1.0,
+		},
+		{
+			name:         "Probability clamps at 0.0 exactly",
+			initialProb:  0.0,
+			outcome:      request.OutcomeSuccess,
+			pi:           0.3, // Pi > Pd
+			pd:           0.2,
+			expectedProb: 0.0,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			conf := &config.FairnessTrackerConfig{
+				L:  1,
+				M:  1,
+				Pi: tc.pi,
+				Pd: tc.pd,
+			}
+			structure, err := NewStructure(conf, 1, false)
+			require.NoError(t, err, "NewStructure should not return an error with valid config")
+
+			clientID := []byte("test-client")
+
+			// Seed the bucket with the initial probability
+			structure.visitBuckets(clientID, func(_, _ uint32, b *bucket) {
+				b.probability = tc.initialProb
+			})
+
+			structure.ReportOutcome(context.Background(), clientID, tc.outcome)
+
+			// Verify the probability is clamped
+			structure.visitBuckets(clientID, func(_, _ uint32, b *bucket) {
+				assert.Equal(t, tc.expectedProb, b.probability)
+			})
+		})
+	}
+}
