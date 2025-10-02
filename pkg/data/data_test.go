@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"math"
 	"math/rand"
+	"sync"
 	"testing"
 	"time"
 )
@@ -362,6 +363,74 @@ func TestReportOutcomeClampsProbability(t *testing.T) {
 			structure.ReportOutcome(context.Background(), clientID, tc.outcome)
 
 			// Verify the probability is clamped
+			structure.visitBuckets(clientID, func(_, _ uint32, b *bucket) {
+				assert.Equal(t, tc.expectedProb, b.probability)
+			})
+		})
+	}
+}
+
+func TestReportOutcomeClamping_Concurrent(t *testing.T) {
+	// Use a fixed seed for deterministic murmur hash
+	rand.Seed(1)
+	defer rand.Seed(time.Now().UnixNano())
+
+	conf := &config.FairnessTrackerConfig{
+		L:  1,
+		M:  1,
+		Pi: 0.1,
+		Pd: 0.05, // Pi > Pd
+	}
+
+	structure, err := NewStructure(conf, 1, false)
+	require.NoError(t, err)
+
+	clientID := []byte("concurrent-client")
+
+	testCases := []struct {
+		name          string
+		initialProb   float64
+		outcome       request.Outcome
+		numGoroutines int
+		expectedProb  float64
+	}{
+		{
+			name:          "Concurrent failures should clamp probability at 1.0",
+			initialProb:   0.5,
+			outcome:       request.OutcomeFailure,
+			numGoroutines: 100,
+			expectedProb:  1.0,
+		},
+		{
+			name:          "Concurrent successes should clamp probability at 0.0",
+			initialProb:   0.5,
+			outcome:       request.OutcomeSuccess,
+			numGoroutines: 100,
+			expectedProb:  0.0,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Set initial probability for the test case
+			structure.visitBuckets(clientID, func(_, _ uint32, b *bucket) {
+				b.probability = tc.initialProb
+			})
+
+			var wg sync.WaitGroup
+			wg.Add(tc.numGoroutines)
+
+			// Launch goroutines to report outcomes concurrently
+			for i := 0; i < tc.numGoroutines; i++ {
+				go func() {
+					defer wg.Done()
+					structure.ReportOutcome(context.Background(), clientID, tc.outcome)
+				}()
+			}
+
+			wg.Wait()
+
+			// Verify the final probability
 			structure.visitBuckets(clientID, func(_, _ uint32, b *bucket) {
 				assert.Equal(t, tc.expectedProb, b.probability)
 			})
