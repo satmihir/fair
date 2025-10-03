@@ -2,13 +2,15 @@ package data
 
 import (
 	"context"
-	"math"
-	"testing"
-
-	"github.com/stretchr/testify/assert"
-
 	"github.com/satmihir/fair/pkg/config"
 	"github.com/satmihir/fair/pkg/request"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"math"
+	"math/rand"
+	"sync"
+	"testing"
+	"time"
 )
 
 func TestValidateStructConfig(t *testing.T) {
@@ -171,59 +173,59 @@ func TestEndToEnd(t *testing.T) {
 //  5. Small positive decay applies correctly for short time intervals.
 func TestAdjustProbability(t *testing.T) {
 	tests := []struct {
-        name     string
-        prob     float64
-        lambda   float64
-        deltaMs  uint64
-        expected float64
-    }{
-        {
-            name:     "No decay when lambda is 0",
-            prob:     0.8,
-            lambda:   0,
-            deltaMs:  10000,
-            expected: 0.8,
-        },
-        {
-            name:     "No decay when deltaMs is 0",
-            prob:     0.6,
-            lambda:   0.5,
-            deltaMs:  0,
-            expected: 0.6,
-        },
-        {
-            name:     "Decay approaches 0 for large deltaMs",
-            prob:     0.9,
-            lambda:   1.0,
-            deltaMs:  1000000, // very large time
-            expected: 0.0,     // should be nearly 0
-        },
-        {
-            name:     "Probability stays 0 if starting from 0",
-            prob:     0,
-            lambda:   1.0,
-            deltaMs:  5000,
-            expected: 0,
-        },
-        {
-            name:     "Small decay with short delta",
-            prob:     1.0,
-            lambda:   0.1,
-            deltaMs:  100,
-            expected: 1.0 * math.Exp(-0.1*0.1), // e^(-0.01)
-        },
-    }
+		name     string
+		prob     float64
+		lambda   float64
+		deltaMs  uint64
+		expected float64
+	}{
+		{
+			name:     "No decay when lambda is 0",
+			prob:     0.8,
+			lambda:   0,
+			deltaMs:  10000,
+			expected: 0.8,
+		},
+		{
+			name:     "No decay when deltaMs is 0",
+			prob:     0.6,
+			lambda:   0.5,
+			deltaMs:  0,
+			expected: 0.6,
+		},
+		{
+			name:     "Decay approaches 0 for large deltaMs",
+			prob:     0.9,
+			lambda:   1.0,
+			deltaMs:  1000000, // very large time
+			expected: 0.0,     // should be nearly 0
+		},
+		{
+			name:     "Probability stays 0 if starting from 0",
+			prob:     0,
+			lambda:   1.0,
+			deltaMs:  5000,
+			expected: 0,
+		},
+		{
+			name:     "Small decay with short delta",
+			prob:     1.0,
+			lambda:   0.1,
+			deltaMs:  100,
+			expected: 1.0 * math.Exp(-0.1*0.1), // e^(-0.01)
+		},
+	}
 
-    for _, tt := range tests {
-        t.Run(tt.name, func(t *testing.T) {
-            got := adjustProbability(tt.prob, tt.lambda, tt.deltaMs)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := adjustProbability(tt.prob, tt.lambda, tt.deltaMs)
 
-            // For float comparisons use tolerance
-            if math.Abs(got-tt.expected) > 1e-6 {
-                t.Errorf("adjustProbability() = %v, want %v", got, tt.expected)
-            }
-        })
-    }
+			// For float comparisons use tolerance
+			if math.Abs(got-tt.expected) > 1e-6 {
+				t.Errorf("adjustProbability() = %v, want %v", got, tt.expected)
+			}
+		})
+	}
 }
 
 // Explicitly test nil config case
@@ -293,3 +295,148 @@ func TestRegisterRequestCallsFinalProbabilityFunction(t *testing.T) {
 	assert.Len(t, captured, int(conf.L), "FinalProbabilityFunction should receive L bucket probabilities")
 }
 
+func TestReportOutcomeClampsProbability(t *testing.T) {
+	// Use a fixed seed for deterministic murmur hash
+	//nolint:staticcheck // Using deprecated rand.Seed for deterministic test behavior
+	rand.Seed(1)
+	//nolint:staticcheck
+	defer rand.Seed(time.Now().UnixNano())
+
+	testCases := []struct {
+		name         string
+		initialProb  float64
+		outcome      request.Outcome
+		pi           float64
+		pd           float64
+		expectedProb float64
+	}{
+		{
+			name:         "Probability does not exceed 1.0 on failure",
+			initialProb:  0.9,
+			outcome:      request.OutcomeFailure,
+			pi:           0.2, // Pi > Pd
+			pd:           0.1,
+			expectedProb: 1.0,
+		},
+		{
+			name:         "Probability does not go below 0.0 on success",
+			initialProb:  0.1,
+			outcome:      request.OutcomeSuccess,
+			pi:           0.3, // Pi > Pd
+			pd:           0.2,
+			expectedProb: 0.0,
+		},
+		{
+			name:         "Probability clamps at 1.0 exactly",
+			initialProb:  1.0,
+			outcome:      request.OutcomeFailure,
+			pi:           0.2, // Pi > Pd
+			pd:           0.1,
+			expectedProb: 1.0,
+		},
+		{
+			name:         "Probability clamps at 0.0 exactly",
+			initialProb:  0.0,
+			outcome:      request.OutcomeSuccess,
+			pi:           0.3, // Pi > Pd
+			pd:           0.2,
+			expectedProb: 0.0,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			conf := &config.FairnessTrackerConfig{
+				L:  1,
+				M:  1,
+				Pi: tc.pi,
+				Pd: tc.pd,
+			}
+			structure, err := NewStructure(conf, 1, false)
+			require.NoError(t, err, "NewStructure should not return an error with valid config")
+
+			clientID := []byte("test-client")
+
+			// Seed the bucket with the initial probability
+			structure.visitBuckets(clientID, func(_, _ uint32, b *bucket) {
+				b.probability = tc.initialProb
+			})
+
+			structure.ReportOutcome(context.Background(), clientID, tc.outcome)
+
+			// Verify the probability is clamped
+			structure.visitBuckets(clientID, func(_, _ uint32, b *bucket) {
+				assert.Equal(t, tc.expectedProb, b.probability)
+			})
+		})
+	}
+}
+
+func TestReportOutcomeClamping_Concurrent(t *testing.T) {
+	// Use a fixed seed for determinist ic murmur hash
+	//nolint:staticcheck // Using deprecated rand.Seed for deterministic test behavior
+	rand.Seed(1)
+	//nolint:staticcheck
+	defer rand.Seed(time.Now().UnixNano())
+
+	conf := &config.FairnessTrackerConfig{
+		L:  1,
+		M:  1,
+		Pi: 0.1,
+		Pd: 0.05,
+	}
+
+	structure, err := NewStructure(conf, 1, false)
+	require.NoError(t, err)
+
+	clientID := []byte("concurrent-client")
+
+	testCases := []struct {
+		name          string
+		initialProb   float64
+		outcome       request.Outcome
+		numGoroutines int
+		expectedProb  float64
+	}{
+		{
+			name:          "Concurrent failures should clamp probability at 1.0",
+			initialProb:   0.5,
+			outcome:       request.OutcomeFailure,
+			numGoroutines: 100,
+			expectedProb:  1.0,
+		},
+		{
+			name:          "Concurrent successes should clamp probability at 0.0",
+			initialProb:   0.5,
+			outcome:       request.OutcomeSuccess,
+			numGoroutines: 100,
+			expectedProb:  0.0,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			structure.visitBuckets(clientID, func(_, _ uint32, b *bucket) {
+				b.probability = tc.initialProb
+			})
+
+			var wg sync.WaitGroup
+			wg.Add(tc.numGoroutines)
+
+			// Launch goroutines to report outcomes concurrently
+			for i := 0; i < tc.numGoroutines; i++ {
+				go func() {
+					defer wg.Done()
+					structure.ReportOutcome(context.Background(), clientID, tc.outcome)
+				}()
+			}
+
+			wg.Wait()
+
+			// Verify the final probability
+			structure.visitBuckets(clientID, func(_, _ uint32, b *bucket) {
+				assert.Equal(t, tc.expectedProb, b.probability)
+			})
+		})
+	}
+}
