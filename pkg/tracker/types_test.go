@@ -33,6 +33,8 @@ func TestBuildFairnessTracker(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, int(tr.trackerConfig.L), 10)
 	assert.Equal(t, int(tr.trackerConfig.M), 10)
+	assert.Equal(t, 1*time.Second, tr.trackerConfig.RotationFrequency,
+"rotation frequency should match the value set via builder")
 }
 
 func TestBuildWithConfig(t *testing.T) {

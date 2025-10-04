@@ -185,6 +185,10 @@ func (s *Structure) currentMillis() uint64 {
 
 // Validate the input config against invariants
 func validateStructureConfig(config *config.FairnessTrackerConfig) error {
+	if config == nil {
+		return NewDataError(nil, "FairnessTrackerConfig cannot be nil")
+	}
+
 	if config.L <= 0 || config.M <= 0 {
 		return fmt.Errorf("the values of L and M must be at least 1, found L: %d and M: %d", config.L, config.M)
 	}

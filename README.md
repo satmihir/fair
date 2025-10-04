@@ -1,5 +1,5 @@
 # FAIR
-![Coverage](https://img.shields.io/badge/Coverage-96.1%25-brightgreen)
+![Coverage](https://img.shields.io/badge/Coverage-84.5%25-brightgreen)
 [![Go Report Card](https://goreportcard.com/badge/github.com/satmihir/fair)](https://goreportcard.com/report/github.com/satmihir/fair)
 [![GoDoc](https://godoc.org/github.com/satmihir/fair?status.svg)](https://godoc.org/github.com/satmihir/fair)
 
@@ -67,6 +67,28 @@ trkB.SetRotationFrequency(1 * time.Minute)
 trk, err := trkB.Build()
 defer trk.Close()
 ```
+Enabling Stats and Debugging Bucket Details
+To collect and inspect per-bucket statistics for debugging, set IncludeStats to true in your tracker config:
+
+```go
+
+conf := config.DefaultFairnessTrackerConfig() //default IncludeStats=false
+conf.IncludeStats = true
+tracker, _ := tracker.NewFairnessTracker(conf)
+```
+
+ResultStats contains probabilities and other debugging information collected while registering a request.
+After registering requests or reporting outcomes, you can access bucket stats from the result:
+
+```go
+result := tracker.RegisterRequest(ctx, clientID)
+if result.Stats != nil {
+    log.Printf("Bucket: %v, Requests: %d, Throttled: %d", 
+        result.Stats.BucketID, result.Stats.RequestCount, result.Stats.ThrottledCount)
+}
+```
+
+This helps you debug fairness decisions and monitor workload behavior.
 
 ### Registering Requests
 
@@ -115,6 +137,18 @@ trkB := tracker.NewFairnessTrackerBuilder()
 
 trk, err := trkB.BuildWithConfig(conf)
 defer trk.Close()
+```
+
+## Logging
+Fair provides logs present which by default are disabled.
+package `logger` exposes an interface with `GetLogger` and `SetLogger` methods.
+
+It also provides an out of the box logger based on std lib. Here's how you can enable it:
+```go
+import (
+	"github.com/satmihir/fair/pkg/logger"
+)
+logger.SetLogger(logger.NewStdLogger())
 ```
 
 ## Development

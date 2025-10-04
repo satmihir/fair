@@ -8,6 +8,7 @@ Fixes # (issue)
 - [ ] New feature
 - [ ] Breaking change
 - [ ] Documentation update
+- [ ] Design
 
 ## Checklist
 - [ ] I have performed a self-review of my code

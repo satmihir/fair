@@ -2,6 +2,7 @@ package tracker
 
 import (
 	"context"
+	"github.com/satmihir/fair/pkg/testutils"
 	"testing"
 	"time"
 
@@ -63,4 +64,30 @@ func TestRotation(t *testing.T) {
 	trk.rotationLock.RUnlock()
 
 	assert.True(t, secID >= 2)
+}
+
+func TestFairnessTrackerBuilder_BuildWithConfig(t *testing.T) {
+	trkB := NewFairnessTrackerBuilder()
+	trkDefault, err := trkB.BuildWithDefaultConfig()
+	assert.NoError(t, err)
+	defer trkDefault.Close()
+
+	trkWithNilConfig, errWithNilConfig := trkB.BuildWithConfig(nil)
+	assert.Error(t, errWithNilConfig)
+	testutils.TestError(t, &FairnessTrackerError{}, errWithNilConfig, "Configuration cannot be nil", nil)
+	assert.Nil(t, trkWithNilConfig)
+
+	trkWithNilConfig, errWithNilConfig = NewFairnessTracker(nil)
+	assert.Error(t, errWithNilConfig)
+	testutils.TestError(t, &FairnessTrackerError{}, errWithNilConfig, "Configuration cannot be nil", nil)
+	assert.Nil(t, trkWithNilConfig)
+}
+func TestNewFairnessTrackerWithClockAndTicker_NilConfig(t *testing.T) {
+	// Passing a nil config should return an error rather than causing a panic.
+	ft, err := NewFairnessTrackerWithClockAndTicker(nil, nil, nil)
+
+	assert.Nil(t, ft)
+	if assert.Error(t, err) {
+		assert.Contains(t, err.Error(), "trackerConfig must not be nil")
+	}
 }

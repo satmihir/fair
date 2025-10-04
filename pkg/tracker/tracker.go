@@ -7,6 +7,7 @@ import (
 
 	"github.com/satmihir/fair/pkg/config"
 	"github.com/satmihir/fair/pkg/data"
+	"github.com/satmihir/fair/pkg/logger"
 	"github.com/satmihir/fair/pkg/request"
 	"github.com/satmihir/fair/pkg/utils"
 )
@@ -36,13 +37,21 @@ type FairnessTracker struct {
 // provided clock and ticker. It is primarily used for tests and simulations
 // where time needs to be controlled.
 func NewFairnessTrackerWithClockAndTicker(trackerConfig *config.FairnessTrackerConfig, clock utils.IClock, ticker utils.ITicker) (*FairnessTracker, error) {
+	// Guard clause: fail fast and return a clear error when caller passes a nil config.
+	// Without this, the function dereferences fields on trackerConfig (e.g. trackerConfig.IncludeStats)
+	// below and will panic with "runtime error: invalid memory address or nil pointer dereference".
+	if trackerConfig == nil {
+		return nil, NewFairnessTrackerError(nil, "trackerConfig must not be nil")
+	}
 	st1, err := data.NewStructureWithClock(trackerConfig, 1, trackerConfig.IncludeStats, clock)
 	if err != nil {
+		logger.Printf("error in creating first tracker : %v", err)
 		return nil, NewFairnessTrackerError(err, "Failed to create a structure")
 	}
 
 	st2, err := data.NewStructureWithClock(trackerConfig, 2, trackerConfig.IncludeStats, clock)
 	if err != nil {
+		logger.Printf("error in creating second tracker : %v", err)
 		return nil, NewFairnessTrackerError(err, "Failed to create a structure")
 	}
 
@@ -83,13 +92,15 @@ func NewFairnessTrackerWithClockAndTicker(trackerConfig *config.FairnessTrackerC
 			}
 		}
 	}()
-
 	return ft, nil
 }
 
 // NewFairnessTracker creates a FairnessTracker using the real system clock and
 // ticker.
 func NewFairnessTracker(trackerConfig *config.FairnessTrackerConfig) (*FairnessTracker, error) {
+	if trackerConfig == nil {
+		return nil, NewFairnessTrackerError(nil, "Configuration cannot be nil")
+	}
 	clk := utils.NewRealClock()
 	ticker := utils.NewRealTicker(trackerConfig.RotationFrequency)
 	return NewFairnessTrackerWithClockAndTicker(trackerConfig, clk, ticker)
