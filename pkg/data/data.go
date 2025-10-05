@@ -189,12 +189,12 @@ func validateStructureConfig(config *config.FairnessTrackerConfig) error {
 		return NewDataError(nil, "FairnessTrackerConfig cannot be nil")
 	}
 
-	if config.L <= 0 || config.M <= 0 {
-		return fmt.Errorf("the values of L and M must be at least 1, found L: %d and M: %d", config.L, config.M)
-	}
-
 	if config.Pd <= 0 || config.Pi <= 0 {
 		return fmt.Errorf("the values of Pi and Pd must >0, found Pi: %f and Pd: %f", config.Pi, config.Pd)
+	}
+
+	if config.L <= 0 || config.M <= 0 {
+		return fmt.Errorf("the values of L and M must be at least 1, found L: %d and M: %d", config.L, config.M)
 	}
 
 	if config.Pd > 1 || config.Pi >= 1 {
