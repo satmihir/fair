@@ -6,6 +6,7 @@ option go_package = "github.com/satmihir/fair/pkg/serialization";
 
 import "google/protobuf/duration.proto";
 
+// Controls how we arrive at the final probability from all the buckets at a level.
 enum LevelSquashingFunction {
   LEVEL_SQUASHING_FUNCTION_MIN = 0;
   LEVEL_SQUASHING_FUNCTION_MEAN = 1;
@@ -49,6 +50,7 @@ message FairRunParameters {
   AlgoParams algoparams = 1;
 }
 
+// Metadata to uniquely identify a host
 message HostMeta {
   string host_guid = 1;
   uint64 serialized_at_ms = 2;
