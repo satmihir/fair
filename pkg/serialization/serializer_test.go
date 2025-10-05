@@ -96,7 +96,7 @@ func createSampleFairStruct() *FairStruct {
 		Cfg: &TrackerCfg{
 			TrackerId:         randomInt64(10000) + 1,
 			ConfigVersion:     randomInt64(100) + 1,
-			M:                 randomUint32(1000) + 50,
+			M:                 randomUint32(1000) + 1000,
 			L:                 randomUint32(50) + 5,
 			Pi:                randomFloat(),
 			Pd:                randomFloat() * 0.5,      // Keep Pd smaller than Pi typically

@@ -1,6 +1,6 @@
 # Protocol Buffer Code Generation Guide
 
-This package provides serialization and deserialization APIs for the FairStruct Protocol Buffer message. The Go code (`v1.pb.go`) is automatically generated from the Protocol Buffer definition (`v1.proto`).
+This package provides serialization and deserialization APIs for the FairStruct Protocol Buffer message. The Go code (`v1.pb.go`) is generated from the Protocol Buffer definition (`v1.proto`).
 
 ## Creating and Managing pb.go Files
 
@@ -28,6 +28,6 @@ which protoc-gen-go
 
 ### Step 2: Generate Go Code from Proto Files
 
-```
+```bash
 protoc --go_out=. --go_opt=paths=source_relative v1.proto
 ```
