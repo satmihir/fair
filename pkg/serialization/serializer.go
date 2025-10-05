@@ -15,56 +15,67 @@ func NewSerializer() *Serializer {
 	return &Serializer{}
 }
 
+var errEmptyData error = fmt.Errorf("data cannot be empty")
+var errNil error = fmt.Errorf("fairStruct cannot be nil")
+
 // Serialize converts a FairStruct to bytes
-func (s *Serializer) Serialize(fairStruct *FairStruct) ([]byte, error) {
+func (s *Serializer) Serialize(fairStruct *FairStruct) (result []byte, err error) {
 	if fairStruct == nil {
-		return nil, fmt.Errorf("fairStruct cannot be nil")
+		err = errNil
+		return
 	}
 
 	data, err := proto.Marshal(fairStruct)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal FairStruct: %w", err)
+		err = fmt.Errorf("failed to marshal FairStruct: %w", err)
+		return
 	}
 
 	return data, nil
 }
 
 // Deserialize converts bytes back to a FairStruct
-func (s *Serializer) Deserialize(data []byte) (*FairStruct, error) {
+func (s *Serializer) Deserialize(data []byte) (ft *FairStruct, err error) {
 	if len(data) == 0 {
-		return nil, fmt.Errorf("data cannot be empty")
+		err = errEmptyData
+		return
 	}
 
 	fairStruct := &FairStruct{}
-	err := proto.Unmarshal(data, fairStruct)
-	if err != nil {
-		return nil, fmt.Errorf("failed to unmarshal FairStruct: %w", err)
+	err1 := proto.Unmarshal(data, fairStruct)
+	if err1 != nil {
+		err = fmt.Errorf("failed to unmarshal FairStruct: %w", err1)
+		return nil, err
 	}
 
 	return fairStruct, nil
 }
 
 // SerializeToJSON converts a FairStruct to JSON bytes
-func (s *Serializer) SerializeToJSON(fairStruct *FairStruct) ([]byte, error) {
+func (s *Serializer) SerializeToJSON(fairStruct *FairStruct) (stuff []byte, err error) {
 	if fairStruct == nil {
-		return nil, fmt.Errorf("fairStruct cannot be nil")
+		err = errNil
+		return
 	}
 
 	// Use protojson for JSON serialization
-	return protojson.Marshal(fairStruct)
+	stuff, err = protojson.Marshal(fairStruct)
+	return
 }
 
 // DeserializeFromJSON converts JSON bytes back to a FairStruct
-func (s *Serializer) DeserializeFromJSON(data []byte) (*FairStruct, error) {
+func (s *Serializer) DeserializeFromJSON(data []byte) (fst *FairStruct, err error) {
 	if len(data) == 0 {
-		return nil, fmt.Errorf("data cannot be empty")
+		err = errEmptyData
+		return
 	}
 
-	fairStruct := &FairStruct{}
-	err := protojson.Unmarshal(data, fairStruct)
-	if err != nil {
-		return nil, fmt.Errorf("failed to unmarshal FairStruct from JSON: %w", err)
+	fst = &FairStruct{}
+	err1 := protojson.Unmarshal(data, fst)
+	if err1 != nil {
+		err = fmt.Errorf("failed to unmarshal FairStruct from JSON: %w", err1)
+		return
 	}
 
-	return fairStruct, nil
+	return
 }

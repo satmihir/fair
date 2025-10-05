@@ -119,7 +119,7 @@ func (s *Structure) RegisterRequest(_ context.Context, clientIdentifier []byte) 
 	}
 
 	// Decide whether to throttle the request based on the probability
-	shouldThrottle := false
+	var shouldThrottle bool
 	if rand.Float64() <= pFinal {
 		shouldThrottle = true
 	}
