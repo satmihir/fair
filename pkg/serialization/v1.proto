@@ -1,0 +1,67 @@
+syntax = "proto3";
+
+package fair.data.v1;
+
+option go_package = "github.com/satmihir/fair/pkg/serialization";
+
+import "google/protobuf/duration.proto";
+
+enum LevelSquashingFunction {
+  LEVEL_SQUASHING_FUNCTION_MIN = 0;
+  LEVEL_SQUASHING_FUNCTION_MEAN = 1;
+}
+
+message TrackerCfg {
+  int64 tracker_id = 1; // Unique per tracker config
+  int64 config_version = 2; // Monotonically increments per version of tracker config
+  uint32 m = 3;
+  uint32 l = 4;
+  double pi = 5;
+  double pd = 6;
+  double lambda = 7;
+  google.protobuf.Duration rotation_frequency = 8;
+  LevelSquashingFunction level_squash_fn = 9;
+}
+
+message Bucket {
+  double probability = 1; 
+  uint64 last_updated_time_ms = 2;
+}
+
+message Level {
+  repeated Bucket buckets = 1;
+}
+
+message FairData {
+  repeated Level levels = 1;
+}
+
+enum Algorithm {
+  MURMURHASH_32 = 0;
+}
+
+message AlgoParams {
+  Algorithm algorithm = 1;
+  uint32 murmur_seed = 2;
+}
+
+message FairRunParameters {
+  AlgoParams algoparams = 1;
+}
+
+message HostMeta {
+  string host_guid = 1;
+  uint64 serialized_at_ms = 2;
+}
+
+message FairRuntimeData {
+  FairRunParameters runtime = 1;
+  FairData data = 2;
+}
+
+// FairStruct - wraps the configuration and the run-time parameters & data associated with a tracker.
+message FairStruct {
+  TrackerCfg cfg = 1;
+  FairRuntimeData data = 2;
+  HostMeta meta = 3;
+}
