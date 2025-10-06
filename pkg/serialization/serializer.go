@@ -15,8 +15,8 @@ func NewSerializer() *Serializer {
 	return &Serializer{}
 }
 
-var errEmptyData error = fmt.Errorf("data cannot be empty")
-var errNil error = fmt.Errorf("fairStruct cannot be nil")
+var errEmptyData = fmt.Errorf("data cannot be empty")
+var errNil = fmt.Errorf("fairStruct cannot be nil")
 
 // Serialize converts a FairStruct to bytes
 func (s *Serializer) Serialize(fairStruct *FairStruct) (result []byte, err error) {
