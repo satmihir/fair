@@ -195,7 +195,7 @@ func TestPrint_ConcurrentAccess(t *testing.T) {
 	reader, writer, _ := os.Pipe()
 	os.Stderr = writer
 	defer func() {
-		_ = writer.Close()
+		writer.Close()
 		os.Stderr = oldStderr
 	}()
 
@@ -219,7 +219,7 @@ func TestPrint_ConcurrentAccess(t *testing.T) {
 	}
 
 	wg.Wait()
-	_ = writer.Close()
+	writer.Close()
 
 	// Assert
 	var buf bytes.Buffer
@@ -266,7 +266,7 @@ func TestSetLogger(t *testing.T) {
 
 				Print(testLog)
 
-				_ = writer.Close()
+				writer.Close()
 				os.Stdout = oldStdout
 
 				var buf bytes.Buffer
@@ -293,7 +293,7 @@ func TestSetLogger(t *testing.T) {
 
 				Print(testLog)
 
-				_ = writer.Close()
+				writer.Close()
 				os.Stdout = oldStdout
 
 				var buf bytes.Buffer

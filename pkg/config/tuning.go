@@ -40,7 +40,7 @@ var (
 			log.Fatalf("Cannot compute final probability with empty buckets slice")
 		}
 
-		minVal := 1.
+		var minVal float64 = 1.
 		for _, b := range buckets {
 			minVal = math.Min(minVal, b)
 		}
