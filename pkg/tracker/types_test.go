@@ -38,7 +38,8 @@ func TestBuildFairnessTracker(t *testing.T) {
 }
 
 func TestBuildWithConfig(t *testing.T) {
-	c := config.GenerateTunedStructureConfig(10, 10, 10)
+	c, err := config.GenerateTunedStructureConfig(10, 10, 10)
+	assert.NoError(t, err)
 	b := NewFairnessTrackerBuilder()
 	tr, err := b.BuildWithConfig(c)
 	assert.NoError(t, err)
