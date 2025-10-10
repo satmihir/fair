@@ -75,7 +75,7 @@ func DefaultFairnessTrackerConfig() *FairnessTrackerConfig {
 		defaultTolerableBadRequestsPerBadFlow)
 	if err != nil {
 		// This should never happen with valid defaults
-		panic(fmt.Sprintf("failed to generate default config: %v", err))
+		panic(fmt.Fatalf("failed to generate default config: %v", err))
 	}
 	return conf
 }
