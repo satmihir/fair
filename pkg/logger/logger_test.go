@@ -30,6 +30,10 @@ func (t *testLogger) Println(args ...any) {
 	fmt.Println(args...)
 }
 
+func (t *testLogger) Errorf(format string, args ...any) {
+	fmt.Printf("ERROR: "+format, args...)
+}
+
 func TestStdLogger_Print_VariousInputs(t *testing.T) {
 	tests := []struct {
 		name     string

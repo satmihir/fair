@@ -1,23 +1,30 @@
 package logger
 
 import (
-	"io"
 	"log"
 	"os"
 	"sync"
-)
-
-var (
-	defaultNoOpLogger        = log.New(io.Discard, "fair: ", log.LstdFlags)
-	logger            Logger = defaultNoOpLogger
-	mx                sync.RWMutex
 )
 
 type Logger interface {
 	Printf(format string, args ...any)
 	Print(args ...any)
 	Println(args ...any)
+	Errorf(format string, args ...any)
 }
+
+type noOpLogger struct{}
+
+func (n *noOpLogger) Printf(format string, args ...any) {}
+func (n *noOpLogger) Print(args ...any)                 {}
+func (n *noOpLogger) Println(args ...any)               {}
+func (n *noOpLogger) Errorf(format string, args ...any) {}
+
+var (
+	defaultNoOpLogger        = &noOpLogger{}
+	logger            Logger = defaultNoOpLogger
+	mx                sync.RWMutex
+)
 
 type stdLogger struct {
 	l *log.Logger
@@ -39,6 +46,10 @@ func (s *stdLogger) Print(args ...any) {
 
 func (s *stdLogger) Println(args ...any) {
 	s.l.Println(args...)
+}
+
+func (s *stdLogger) Errorf(format string, args ...any) {
+	s.l.Printf("ERROR: "+format, args...)
 }
 
 // Replaces default logger with provided logger
@@ -68,4 +79,9 @@ func Print(args ...any) {
 // Printf uses whichever logger is currently set
 func Printf(format string, args ...any) {
 	GetLogger().Printf(format, args...)
+}
+
+// Errorf uses whichever logger is currently set
+func Errorf(format string, args ...any) {
+	GetLogger().Errorf(format, args...)
 }
