@@ -2,9 +2,10 @@ package config
 
 import (
 	"fmt"
-	"log"
 	"math"
 	"time"
+
+	"github.com/satmihir/fair/pkg/logger"
 )
 
 const (
@@ -38,7 +39,7 @@ var (
 	// slice. It is the default implementation used by the tracker.
 	MinFinalProbabilityFunction FinalProbabilityFunction = func(buckets []float64) float64 {
 		if len(buckets) == 0 {
-			log.Fatalf("Cannot compute final probability with empty buckets slice")
+			logger.Fatalf("Cannot compute final probability with empty buckets slice")
 		}
 
 		var minVal float64 = 1.
@@ -54,7 +55,7 @@ var (
 	// too strict.
 	MeanFinalProbabilityFunction FinalProbabilityFunction = func(buckets []float64) float64 {
 		if len(buckets) == 0 {
-			log.Fatalf("Cannot compute final probability with empty buckets slice")
+			logger.Fatalf("Cannot compute final probability with empty buckets slice")
 		}
 
 		var total float64
@@ -75,7 +76,7 @@ func DefaultFairnessTrackerConfig() *FairnessTrackerConfig {
 		defaultTolerableBadRequestsPerBadFlow)
 	if err != nil {
 		// This should never happen with valid defaults
-		log.Fatalf("failed to generate default config: %v", err)
+		logger.Fatalf("failed to generate default config: %v", err)
 	}
 	return conf
 }

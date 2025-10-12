@@ -10,7 +10,7 @@ type Logger interface {
 	Printf(format string, args ...any)
 	Print(args ...any)
 	Println(args ...any)
-	Errorf(format string, args ...any)
+	Fatalf(format string, args ...any)
 }
 
 type noOpLogger struct{}
@@ -18,7 +18,7 @@ type noOpLogger struct{}
 func (n *noOpLogger) Printf(_ string, _ ...any) {}
 func (n *noOpLogger) Print(_ ...any)            {}
 func (n *noOpLogger) Println(_ ...any)          {}
-func (n *noOpLogger) Errorf(_ string, _ ...any) {}
+func (n *noOpLogger) Fatalf(_ string, _ ...any) {}
 
 var (
 	defaultNoOpLogger        = &noOpLogger{}
@@ -48,8 +48,8 @@ func (s *stdLogger) Println(args ...any) {
 	s.l.Println(args...)
 }
 
-func (s *stdLogger) Errorf(format string, args ...any) {
-	s.l.Printf("ERROR: "+format, args...)
+func (s *stdLogger) Fatalf(format string, args ...any) {
+	s.l.Fatalf(format, args...)
 }
 
 // Replaces default logger with provided logger
@@ -81,7 +81,7 @@ func Printf(format string, args ...any) {
 	GetLogger().Printf(format, args...)
 }
 
-// Errorf uses whichever logger is currently set
-func Errorf(format string, args ...any) {
-	GetLogger().Errorf(format, args...)
+// Fatalf uses whichever logger is currently set and panics after logging
+func Fatalf(format string, args ...any) {
+	GetLogger().Fatalf(format, args...)
 }

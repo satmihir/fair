@@ -79,7 +79,7 @@ func NewFairnessTrackerWithClockAndTicker(trackerConfig *config.FairnessTrackerC
 			case <-ticker.C():
 				s, err := data.NewStructureWithClock(trackerConfig, ft.structureIDCounter, trackerConfig.IncludeStats, clock)
 				if err != nil {
-					logger.Errorf("failed to create a structure during rotation: %v", err)
+					logger.Fatalf("failed to create a structure during rotation: %v", err)
 					return
 				}
 				ft.structureIDCounter++
