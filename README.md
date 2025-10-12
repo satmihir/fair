@@ -132,10 +132,16 @@ You can use the `GenerateTunedStructureConfig` to tune the tracker without direc
 - `tolerableBadRequestsPerBadFlow` - Number of requests we can tolerate before we fully shut down a flow.
 
 ```go
-conf := config.GenerateTunedStructureConfig(1000, 1000, 25)
+conf, err := config.GenerateTunedStructureConfig(1000, 1000, 25)
+if err != nil {
+    log.Fatal(err)
+}
 trkB := tracker.NewFairnessTrackerBuilder()
 
 trk, err := trkB.BuildWithConfig(conf)
+if err != nil {
+    log.Fatal(err)
+}
 defer trk.Close()
 ```
 

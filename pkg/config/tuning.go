@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"log"
 	"math"
 	"time"
@@ -68,10 +69,15 @@ var (
 // DefaultFairnessTrackerConfig returns a configuration that should work well
 // for most applications without any additional tuning.
 func DefaultFairnessTrackerConfig() *FairnessTrackerConfig {
-	return GenerateTunedStructureConfig(
+	conf, err := GenerateTunedStructureConfig(
 		defaultExpectedClientFlows,
 		defaultBucketsPerLevel,
 		defaultTolerableBadRequestsPerBadFlow)
+	if err != nil {
+		// This should never happen with valid defaults
+		panic(fmt.Fatalf("failed to generate default config: %v", err))
+	}
+	return conf
 }
 
 // Generates a "good enough" config to use for a structure underneath the throttler
@@ -92,7 +98,18 @@ func DefaultFairnessTrackerConfig() *FairnessTrackerConfig {
 //   - bucketsPerLevel: number of buckets per level in the data structure.
 //   - tolerableBadRequestsPerBadFlow: number of failed requests tolerated before
 //     a flow is fully blocked.
-func GenerateTunedStructureConfig(expectedClientFlows, bucketsPerLevel, tolerableBadRequestsPerBadFlow uint32) *FairnessTrackerConfig {
+//
+// Returns an error if tolerableBadRequestsPerBadFlow is 0.
+func GenerateTunedStructureConfig(expectedClientFlows, bucketsPerLevel, tolerableBadRequestsPerBadFlow uint32) (*FairnessTrackerConfig, error) {
+	// Validate tolerableBadRequestsPerBadFlow to prevent division by zero when computing Pi.
+	// We return an error instead of silently using a default value because:
+	// - Most users should use DefaultFairnessTrackerConfig() which provides sensible defaults (25 currently)
+	// - The parameter is critical: it directly computes Pi = 1 / tolerableBadRequestsPerBadFlow
+	// - A value of 0 would mean "never block flows" which is not right for a fairness tracker
+	if tolerableBadRequestsPerBadFlow <= 0 {
+		return nil, fmt.Errorf("tolerableBadRequestsPerBadFlow must be greater than 0")
+	}
+
 	M := uint32(math.Ceil(float64(expectedClientFlows) * percentBadClientFlows))
 	L := CalculateL(bucketsPerLevel, M, lowProbability)
 	if L < minL {
@@ -113,7 +130,7 @@ func GenerateTunedStructureConfig(expectedClientFlows, bucketsPerLevel, tolerabl
 		RotationFrequency:        defaultRotationDuration,
 		IncludeStats:             false,
 		FinalProbabilityFunction: MinFinalProbabilityFunction,
-	}
+	}, nil
 }
 
 // Get the appropriate number of levels to achieve the target collision probability:
