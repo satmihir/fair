@@ -15,10 +15,10 @@ type Logger interface {
 
 type noOpLogger struct{}
 
-func (n *noOpLogger) Printf(format string, args ...any) {}
-func (n *noOpLogger) Print(args ...any)                 {}
-func (n *noOpLogger) Println(args ...any)               {}
-func (n *noOpLogger) Errorf(format string, args ...any) {}
+func (n *noOpLogger) Printf(_ string, _ ...any) {}
+func (n *noOpLogger) Print(_ ...any)            {}
+func (n *noOpLogger) Println(_ ...any)          {}
+func (n *noOpLogger) Errorf(_ string, _ ...any) {}
 
 var (
 	defaultNoOpLogger        = &noOpLogger{}
