@@ -6,33 +6,46 @@ option go_package = "github.com/satmihir/fair/pkg/serialization";
 
 import "google/protobuf/duration.proto";
 
-// Controls how we arrive at the final probability from all the buckets at a level.
+// Controls how we arrive at the final probability from all the buckets at a level
 enum LevelSquashingFunction {
   LEVEL_SQUASHING_FUNCTION_MIN = 0;
   LEVEL_SQUASHING_FUNCTION_MEAN = 1;
 }
 
+// TrackerCfg contains all the configurations related to a tracker
 message TrackerCfg {
-  int64 tracker_id = 1; // Unique per tracker config
-  int64 config_version = 2; // Monotonically increments per version of tracker config
+  // Unique ID per tracker config
+  string tracker_id = 1;
+  // Version the tracker config
+  uint64 config_version = 2;
+  // Number of buckets per level
   uint32 m = 3;
+  // Number of levels per tracker
   uint32 l = 4;
+  // Increment probability used on failed requests
   double pi = 5;
+  // Decrement probability used on successfull requests
   double pd = 6;
+  // Deacy rate for bucket proabilities
   double lambda = 7;
+  // Controls how often the internal structures are rotated
   google.protobuf.Duration rotation_frequency = 8;
+  // Controls the logic for arriving at the final probability from all the buckets at a level
   LevelSquashingFunction level_squash_fn = 9;
 }
 
+// Bucket holds the proability and the last update time
 message Bucket {
   double probability = 1; 
   uint64 last_updated_time_ms = 2;
 }
 
+// Each level holds an array of Buckets (M Buckets)
 message Level {
   repeated Bucket buckets = 1;
 }
 
+// FairData holds the tracking data containing multiple levels (L levels)
 message FairData {
   repeated Level levels = 1;
 }
@@ -41,13 +54,15 @@ enum Algorithm {
   MURMURHASH_32 = 0;
 }
 
+// AlgoParams holds the choice of Algorithm and the relevant parameters
 message AlgoParams {
   Algorithm algorithm = 1;
   uint32 murmur_seed = 2;
 }
 
+// FairRunParameters contains the runtime params with the instance of Fair
 message FairRunParameters {
-  AlgoParams algoparams = 1;
+  AlgoParams algo_params = 1;
 }
 
 // Metadata to uniquely identify a host
@@ -56,12 +71,13 @@ message HostMeta {
   uint64 serialized_at_ms = 2;
 }
 
+// Holds the parameters and the associated data
 message FairRuntimeData {
   FairRunParameters runtime = 1;
   FairData data = 2;
 }
 
-// FairStruct - wraps the configuration and the run-time parameters & data associated with a tracker.
+// FairStruct - wraps up the config, parameters and the data associated with a Fair Tracker
 message FairStruct {
   TrackerCfg cfg = 1;
   FairRuntimeData data = 2;

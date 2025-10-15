@@ -56,8 +56,8 @@ enum LevelSquashingFunction {
 }
 
 message TrackerCfg {
-  int64 tracker_id = 1; // Unique per tracker config
-  int64 config_version = 2; // Monotonically increments per version of tracker config
+  string tracker_id = 1; // Unique per tracker config
+  uint64 config_version = 2; // Monotonically increments per version of tracker config
   uint32 m = 3;
   uint32 l = 4;
   double pi = 5;
