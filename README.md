@@ -162,8 +162,12 @@ logger.SetLogger(logger.NewStdLogger())
 Run tests and static analysis locally with:
 
 ```bash
-go test ./...
-golangci-lint run ./...
+make test
+```
+
+Generate protobuff wrappers with:
+```bash
+make proto
 ```
 
 Ensure [golangci-lint](https://github.com/golangci/golangci-lint) is installed to execute the linter.
