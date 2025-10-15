@@ -35,7 +35,7 @@ func TestSerialization(t *testing.T) {
 		// Verify the data with deep comparison
 		if !proto.Equal(fairStruct, deserializedStruct) {
 			t.Errorf("Binary serialization/deserialization did not preserve exact contents")
-			t.Logf("Original TrackerId: %d, Deserialized TrackerId: %d", fairStruct.Cfg.TrackerId, deserializedStruct.Cfg.TrackerId)
+			t.Logf("Original TrackerId: %s, Deserialized TrackerId: %s", fairStruct.Cfg.TrackerId, deserializedStruct.Cfg.TrackerId)
 			t.Logf("Original Pi: %f, Deserialized Pi: %f", fairStruct.Cfg.Pi, deserializedStruct.Cfg.Pi)
 			t.Logf("Original bucket count: %d, Deserialized bucket count: %d",
 				len(fairStruct.Data.Data.Levels[0].Buckets), len(deserializedStruct.Data.Data.Levels[0].Buckets))
@@ -62,7 +62,7 @@ func TestSerialization(t *testing.T) {
 		// Verify the data with deep comparison
 		if !proto.Equal(fairStruct, deserializedStruct) {
 			t.Errorf("JSON serialization/deserialization did not preserve exact contents")
-			t.Logf("Original TrackerId: %d, Deserialized TrackerId: %d", fairStruct.Cfg.TrackerId, deserializedStruct.Cfg.TrackerId)
+			t.Logf("Original TrackerId: %s, Deserialized TrackerId: %s", fairStruct.Cfg.TrackerId, deserializedStruct.Cfg.TrackerId)
 			t.Logf("Original Lambda: %f, Deserialized Lambda: %f", fairStruct.Cfg.Lambda, deserializedStruct.Cfg.Lambda)
 			t.Logf("Original HostGuid: %s, Deserialized HostGuid: %s", fairStruct.Meta.HostGuid, deserializedStruct.Meta.HostGuid)
 		}
@@ -82,6 +82,10 @@ func createSampleFairStruct() *FairStruct {
 		return uint32(n.Int64())
 	}
 
+	randomUint64 := func(max uint64) uint64 {
+		n, _ := rand.Int(rand.Reader, big.NewInt(int64(max)))
+		return uint64(n.Int64())
+	}
 	randomFloat := func() float64 {
 		n, _ := rand.Int(rand.Reader, big.NewInt(1000))
 		return float64(n.Int64()) / 1000.0
@@ -94,8 +98,8 @@ func createSampleFairStruct() *FairStruct {
 
 	return &FairStruct{
 		Cfg: &TrackerCfg{
-			TrackerId:         randomInt64(10000) + 1,
-			ConfigVersion:     randomInt64(100) + 1,
+			TrackerId:         fmt.Sprintf("%d", randomInt64(10000)+1),
+			ConfigVersion:     randomUint64(100) + 1,
 			M:                 randomUint32(1000) + 1000,
 			L:                 randomUint32(50) + 5,
 			Pi:                randomFloat(),
@@ -106,7 +110,7 @@ func createSampleFairStruct() *FairStruct {
 		},
 		Data: &FairRuntimeData{
 			Runtime: &FairRunParameters{
-				Algoparams: &AlgoParams{
+				AlgoParams: &AlgoParams{
 					Algorithm:  Algorithm_MURMURHASH_32,
 					MurmurSeed: randomUint32(1000000),
 				},

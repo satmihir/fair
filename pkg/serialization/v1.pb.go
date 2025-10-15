@@ -22,6 +22,7 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+// Controls how we arrive at the final probability from all the buckets at a level
 type LevelSquashingFunction int32
 
 const (
@@ -111,19 +112,29 @@ func (Algorithm) EnumDescriptor() ([]byte, []int) {
 	return file_v1_proto_rawDescGZIP(), []int{1}
 }
 
+// TrackerCfg contains all the configurations related to a tracker
 type TrackerCfg struct {
-	state             protoimpl.MessageState `protogen:"open.v1"`
-	TrackerId         int64                  `protobuf:"varint,1,opt,name=tracker_id,json=trackerId,proto3" json:"tracker_id,omitempty"`             // Unique per tracker config
-	ConfigVersion     int64                  `protobuf:"varint,2,opt,name=config_version,json=configVersion,proto3" json:"config_version,omitempty"` // Monotonically increments per version of tracker config
-	M                 uint32                 `protobuf:"varint,3,opt,name=m,proto3" json:"m,omitempty"`
-	L                 uint32                 `protobuf:"varint,4,opt,name=l,proto3" json:"l,omitempty"`
-	Pi                float64                `protobuf:"fixed64,5,opt,name=pi,proto3" json:"pi,omitempty"`
-	Pd                float64                `protobuf:"fixed64,6,opt,name=pd,proto3" json:"pd,omitempty"`
-	Lambda            float64                `protobuf:"fixed64,7,opt,name=lambda,proto3" json:"lambda,omitempty"`
-	RotationFrequency *durationpb.Duration   `protobuf:"bytes,8,opt,name=rotation_frequency,json=rotationFrequency,proto3" json:"rotation_frequency,omitempty"`
-	LevelSquashFn     LevelSquashingFunction `protobuf:"varint,9,opt,name=level_squash_fn,json=levelSquashFn,proto3,enum=fair.data.v1.LevelSquashingFunction" json:"level_squash_fn,omitempty"`
-	unknownFields     protoimpl.UnknownFields
-	sizeCache         protoimpl.SizeCache
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Unique ID per tracker config
+	TrackerId string `protobuf:"bytes,1,opt,name=tracker_id,json=trackerId,proto3" json:"tracker_id,omitempty"`
+	// Version the tracker config
+	ConfigVersion uint64 `protobuf:"varint,2,opt,name=config_version,json=configVersion,proto3" json:"config_version,omitempty"`
+	// Number of buckets per level
+	M uint32 `protobuf:"varint,3,opt,name=m,proto3" json:"m,omitempty"`
+	// Number of levels per tracker
+	L uint32 `protobuf:"varint,4,opt,name=l,proto3" json:"l,omitempty"`
+	// Increment probability used on failed requests
+	Pi float64 `protobuf:"fixed64,5,opt,name=pi,proto3" json:"pi,omitempty"`
+	// Decrement probability used on successfull requests
+	Pd float64 `protobuf:"fixed64,6,opt,name=pd,proto3" json:"pd,omitempty"`
+	// Deacy rate for bucket proabilities
+	Lambda float64 `protobuf:"fixed64,7,opt,name=lambda,proto3" json:"lambda,omitempty"`
+	// Controls how often the internal structures are rotated
+	RotationFrequency *durationpb.Duration `protobuf:"bytes,8,opt,name=rotation_frequency,json=rotationFrequency,proto3" json:"rotation_frequency,omitempty"`
+	// Controls the logic for arriving at the final probability from all the buckets at a level
+	LevelSquashFn LevelSquashingFunction `protobuf:"varint,9,opt,name=level_squash_fn,json=levelSquashFn,proto3,enum=fair.data.v1.LevelSquashingFunction" json:"level_squash_fn,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *TrackerCfg) Reset() {
@@ -156,14 +167,14 @@ func (*TrackerCfg) Descriptor() ([]byte, []int) {
 	return file_v1_proto_rawDescGZIP(), []int{0}
 }
 
-func (x *TrackerCfg) GetTrackerId() int64 {
+func (x *TrackerCfg) GetTrackerId() string {
 	if x != nil {
 		return x.TrackerId
 	}
-	return 0
+	return ""
 }
 
-func (x *TrackerCfg) GetConfigVersion() int64 {
+func (x *TrackerCfg) GetConfigVersion() uint64 {
 	if x != nil {
 		return x.ConfigVersion
 	}
@@ -219,6 +230,7 @@ func (x *TrackerCfg) GetLevelSquashFn() LevelSquashingFunction {
 	return LevelSquashingFunction_LEVEL_SQUASHING_FUNCTION_MIN
 }
 
+// Bucket holds the proability and the last update time
 type Bucket struct {
 	state             protoimpl.MessageState `protogen:"open.v1"`
 	Probability       float64                `protobuf:"fixed64,1,opt,name=probability,proto3" json:"probability,omitempty"`
@@ -271,6 +283,7 @@ func (x *Bucket) GetLastUpdatedTimeMs() uint64 {
 	return 0
 }
 
+// Each level holds an array of Buckets (M Buckets)
 type Level struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Buckets       []*Bucket              `protobuf:"bytes,1,rep,name=buckets,proto3" json:"buckets,omitempty"`
@@ -315,6 +328,7 @@ func (x *Level) GetBuckets() []*Bucket {
 	return nil
 }
 
+// FairData holds the tracking data containing multiple levels (L levels)
 type FairData struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Levels        []*Level               `protobuf:"bytes,1,rep,name=levels,proto3" json:"levels,omitempty"`
@@ -359,6 +373,7 @@ func (x *FairData) GetLevels() []*Level {
 	return nil
 }
 
+// AlgoParams holds the choice of Algorithm and the relevant parameters
 type AlgoParams struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Algorithm     Algorithm              `protobuf:"varint,1,opt,name=algorithm,proto3,enum=fair.data.v1.Algorithm" json:"algorithm,omitempty"`
@@ -411,9 +426,10 @@ func (x *AlgoParams) GetMurmurSeed() uint32 {
 	return 0
 }
 
+// FairRunParameters contains the runtime params with the instance of Fair
 type FairRunParameters struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Algoparams    *AlgoParams            `protobuf:"bytes,1,opt,name=algoparams,proto3" json:"algoparams,omitempty"`
+	AlgoParams    *AlgoParams            `protobuf:"bytes,1,opt,name=algo_params,json=algoParams,proto3" json:"algo_params,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -448,13 +464,14 @@ func (*FairRunParameters) Descriptor() ([]byte, []int) {
 	return file_v1_proto_rawDescGZIP(), []int{5}
 }
 
-func (x *FairRunParameters) GetAlgoparams() *AlgoParams {
+func (x *FairRunParameters) GetAlgoParams() *AlgoParams {
 	if x != nil {
-		return x.Algoparams
+		return x.AlgoParams
 	}
 	return nil
 }
 
+// Metadata to uniquely identify a host
 type HostMeta struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
 	HostGuid       string                 `protobuf:"bytes,1,opt,name=host_guid,json=hostGuid,proto3" json:"host_guid,omitempty"`
@@ -507,6 +524,7 @@ func (x *HostMeta) GetSerializedAtMs() uint64 {
 	return 0
 }
 
+// Holds the parameters and the associated data
 type FairRuntimeData struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Runtime       *FairRunParameters     `protobuf:"bytes,1,opt,name=runtime,proto3" json:"runtime,omitempty"`
@@ -559,7 +577,7 @@ func (x *FairRuntimeData) GetData() *FairData {
 	return nil
 }
 
-// FairStruct - wraps the configuration and the run-time parameters & data associated with a tracker.
+// FairStruct - wraps up the config, parameters and the data associated with a Fair Tracker
 type FairStruct struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Cfg           *TrackerCfg            `protobuf:"bytes,1,opt,name=cfg,proto3" json:"cfg,omitempty"`
@@ -628,8 +646,8 @@ const file_v1_proto_rawDesc = "" +
 	"\n" +
 	"TrackerCfg\x12\x1d\n" +
 	"\n" +
-	"tracker_id\x18\x01 \x01(\x03R\ttrackerId\x12%\n" +
-	"\x0econfig_version\x18\x02 \x01(\x03R\rconfigVersion\x12\f\n" +
+	"tracker_id\x18\x01 \x01(\tR\ttrackerId\x12%\n" +
+	"\x0econfig_version\x18\x02 \x01(\x04R\rconfigVersion\x12\f\n" +
 	"\x01m\x18\x03 \x01(\rR\x01m\x12\f\n" +
 	"\x01l\x18\x04 \x01(\rR\x01l\x12\x0e\n" +
 	"\x02pi\x18\x05 \x01(\x01R\x02pi\x12\x0e\n" +
@@ -648,11 +666,10 @@ const file_v1_proto_rawDesc = "" +
 	"AlgoParams\x125\n" +
 	"\talgorithm\x18\x01 \x01(\x0e2\x17.fair.data.v1.AlgorithmR\talgorithm\x12\x1f\n" +
 	"\vmurmur_seed\x18\x02 \x01(\rR\n" +
-	"murmurSeed\"M\n" +
-	"\x11FairRunParameters\x128\n" +
-	"\n" +
-	"algoparams\x18\x01 \x01(\v2\x18.fair.data.v1.AlgoParamsR\n" +
-	"algoparams\"Q\n" +
+	"murmurSeed\"N\n" +
+	"\x11FairRunParameters\x129\n" +
+	"\valgo_params\x18\x01 \x01(\v2\x18.fair.data.v1.AlgoParamsR\n" +
+	"algoParams\"Q\n" +
 	"\bHostMeta\x12\x1b\n" +
 	"\thost_guid\x18\x01 \x01(\tR\bhostGuid\x12(\n" +
 	"\x10serialized_at_ms\x18\x02 \x01(\x04R\x0eserializedAtMs\"x\n" +
@@ -704,7 +721,7 @@ var file_v1_proto_depIdxs = []int32{
 	3,  // 2: fair.data.v1.Level.buckets:type_name -> fair.data.v1.Bucket
 	4,  // 3: fair.data.v1.FairData.levels:type_name -> fair.data.v1.Level
 	1,  // 4: fair.data.v1.AlgoParams.algorithm:type_name -> fair.data.v1.Algorithm
-	6,  // 5: fair.data.v1.FairRunParameters.algoparams:type_name -> fair.data.v1.AlgoParams
+	6,  // 5: fair.data.v1.FairRunParameters.algo_params:type_name -> fair.data.v1.AlgoParams
 	7,  // 6: fair.data.v1.FairRuntimeData.runtime:type_name -> fair.data.v1.FairRunParameters
 	5,  // 7: fair.data.v1.FairRuntimeData.data:type_name -> fair.data.v1.FairData
 	2,  // 8: fair.data.v1.FairStruct.cfg:type_name -> fair.data.v1.TrackerCfg
