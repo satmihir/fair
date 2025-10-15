@@ -9,16 +9,18 @@ proto:
 	@echo "✅ Proto generation completed"
 
 # Build the project
-build:
+build: proto
 	@echo "Building..."
 	@go build -o fair ./
 	@echo "✅ Build completed"
 
 # Run tests
-test:
+test: proto
 	@echo "Running tests..."
 	@go test -v ./...
 	@echo "✅ Tests completed"
+	@golangci-lint run ./...
+	@echo "✅ Linting completed"
 
 # Clean build artifacts
 clean:
