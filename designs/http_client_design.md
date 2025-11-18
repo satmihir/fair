@@ -54,8 +54,8 @@ Core types (high-level):
 ```go
 // FairRoundTripper wraps an http.RoundTripper with FAIR.
 type FairRoundTripper struct {
-    // config: *FairRoundTripperConfig
-    // transport: http.RoundTripper
+    config: *FairRoundTripperConfig
+    transport: http.RoundTripper
 }
 
 // Config for FairRoundTripper.
@@ -106,7 +106,6 @@ On every request:
 3. **Throttle if needed**
 
    * If `ShouldThrottle` is true:
-
      * Option A (default): return a synthetic HTTP response with configurable status (default 429), `X-Fair-Throttled: true`, optional `Retry-After`.
      * Call `OnThrottle` hook if set.
    * No network call is made in this case.
@@ -114,13 +113,11 @@ On every request:
 4. **Execute request** using the wrapped `http.RoundTripper`.
 
 5. **Report outcome**
-
    * Map `(resp, err)` into `request.Outcome` (success vs resource failure) and call `Tracker.ReportOutcome(ctx, clientID, outcome)`.
 
 **Retry interaction**
 
 * Retries are **optional**, configured via `RetryConfig`.
-
 * Default behavior:
   * Retry only **idempotent methods** (`GET`, `HEAD`, `OPTIONS`, `TRACE`, `PUT`, `DELETE`).
   * Retry on:
@@ -128,14 +125,14 @@ On every request:
     * Configurable 5xx codes (default: 500, 502, 503, 504) and optionally 429.
   * Use exponential backoff with jitter, with small, conservative defaults (e.g. max 3 attempts).
 
-* Important: **Each retry attempt** registers and reports its own outcome with FAIR, so client behavior remains visible to the fairness algorithm and can be throttled if necessary.
+> Important: **Each retry attempt** registers and reports its own outcome with FAIR, so client behavior remains visible to the fairness algorithm and can be throttled if necessary.
 
 **Standalone client**
 
 `FairHTTPClient`:
 
-* Constructs an `http.Transport` with production-ish defaults:
-  * Higher `MaxIdleConns` / `MaxIdleConnsPerHost` than stdlib defaults.
+* Constructs an `http.Transport` with production defaults:
+  * Higher `MaxIdleConns` / `MaxIdleConnsPerHost` than `stdlib` defaults.
   * Sensible connection and header timeouts.
 * Wraps that transport with `FairRoundTripper`.
 * Exposes:
@@ -149,14 +146,13 @@ This lets users choose:
 
 **Fail-Open vs Fail-Closed Behavior**
 
-FAIR is an advisory load-shedding and fairness system. If the client is unable to communicate with the FAIR tracker (e.g., local process issue, shared-memory corruption, or unexpected internal errors), we must choose between:
+If the client is unable to communicate with the FAIR tracker (e.g., local process issue, shared-memory corruption, or unexpected internal errors), we must choose between:
 
 #### Fail-Open (default)
 
 If FAIR errors, allow the request to proceed as a normal HTTP request, without fairness metadata.
 
 Rationale:
-
 - Prioritizes availability over fairness.
 - Prevents widespread outages if FAIR has a local transient issue.
 - Keeps FAIR as non-critical path for correctness.
@@ -166,35 +162,32 @@ Rationale:
 If FAIR errors, return an error immediately and do not send the request.
 
 Rationale:
-
 - Prioritizes strict fairness guarantees.
 - Useful for environments where all traffic must be fairness-aware (internal-only systems, research testing, academic correctness verification).
 
 >
 > **Proposed Default: Fail-Open**
+> The majority of production use cases favor availability: if FAIR stops functioning momentarily, the system should degrade gracefully rather than blocking all outbound requests. Fail-closed remains available for advanced users who need stronger correctness guarantees.
 >
-
-The majority of production use cases favor availability: if FAIR stops functioning momentarily, the system should degrade gracefully rather than blocking all outbound requests. Fail-closed remains available for advanced users who need stronger correctness guarantees.
 
 ### Security / Privacy
 
 **Client identifiers**
 
-* Document that **client IDs must not contain PII** (e.g. raw emails).
+* Document that **client IDs must not contain PII** (e.g. raw emails, password, tokens etc.)
 * Recommend using **opaque IDs or hashes**.
-* Provide `HashedClientIDExtractor` helper that wraps another extractor and returns a SHA-256 hash of the ID.
+* Provide `HashedClientIDExtractor` helper that wraps another extractor and returns a _SHA-256_ hash of the ID.
 
 FAIR already stores identifiers in a Bloom filter rather than as plain strings, but we still encourage non-PII identifiers for defense-in-depth.
 
 **Retry amplification**
 
 * Defaults are intentionally conservative:
-
   * Small `MaxAttempts` (e.g. 3).
   * Exponential backoff with jitter.
   * Only idempotent methods retried by default.
-* Document guidance on:
 
+* Document guidance on:
   * When to enable retries.
   * How to tune backoff under load.
 
@@ -214,8 +207,6 @@ FAIR already stores identifiers in a Bloom filter rather than as plain strings, 
   * No new non-stdlib dependencies; relies on `github.com/satmihir/fair/pkg/...` and `net/http`.
 
 ## Alternatives Considered
-
-Summarized (you already had good analyses):
 
 1. **Wrap `http.Client` instead of `RoundTripper`**
    * Rejected: less composable and deviates from idiomatic Go HTTP middleware.
@@ -250,9 +241,7 @@ Summarized (you already had good analyses):
 * Performance tests (basic benchmarks):
   * Compare Fair-wrapped vs raw `http.Client` for latency and allocations.
 
-## Future Work (Out of Scope Here)
-
-Not implemented in this design, but informed by it:
+## Future Work
 
 * **Circuit breaker RoundTripper** stacked with FAIR and retry.
 * **Metrics / tracing RoundTripper** (Prometheus + OpenTelemetry).
