@@ -2,7 +2,6 @@ package tracker
 
 import (
 	"context"
-	"log"
 	"sync"
 
 	"github.com/satmihir/fair/pkg/config"
@@ -80,8 +79,8 @@ func NewFairnessTrackerWithClockAndTicker(trackerConfig *config.FairnessTrackerC
 			case <-ticker.C():
 				s, err := data.NewStructureWithClock(trackerConfig, ft.structureIDCounter, trackerConfig.IncludeStats, clock)
 				if err != nil {
-					// TODO: While this should never happen, think if we want to handle this more gracefully
-					log.Fatalf("Failed to create a structure during rotation")
+					logger.Fatalf("failed to create a structure during rotation: %v", err)
+					return
 				}
 				ft.structureIDCounter++
 

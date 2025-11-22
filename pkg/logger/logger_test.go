@@ -30,6 +30,11 @@ func (t *testLogger) Println(args ...any) {
 	fmt.Println(args...)
 }
 
+func (t *testLogger) Fatalf(format string, args ...any) {
+	msg := fmt.Sprintf(format, args...)
+	panic(msg)
+}
+
 func TestStdLogger_Print_VariousInputs(t *testing.T) {
 	tests := []struct {
 		name     string
