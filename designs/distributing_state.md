@@ -45,7 +45,7 @@ Bucket data has high cardinality (Space = `NumSeeds * NumCols * NumRows`). Each 
 ### Seed Identification Strategy
 To ensure all instances agree on the seed for a given time window, three options were evaluated:
 
-1.  **Commit Start Time**: Instances use distributed locks to agree on a global start time, Arrive at a seed based on diff between the current time and the start time.
+1.  **Commit Start Time**: Instances use distributed locks to agree on a global start time, then arrive at a seed based on the difference between the current time and the start time.
 2.  **Rounded Local Time**: Instances use their local time, rounded to the window duration.
 3.  **Computed Seed**: Instances compute a monotonically increasing seed and coordinate via distributed locks.
 
