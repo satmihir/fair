@@ -45,7 +45,7 @@ Bucket data has high cardinality (Space = `NumSeeds * NumCols * NumRows`). Each 
 ### Seed Identification Strategy
 To ensure all instances agree on the seed for a given time window, three options were evaluated:
 
-1.  **Commit Start Time**: Instances use distributed locks to agree on a global start time, then arrive at a seed based on the difference between the current time and the start time.
+1.  **Commit Start Time**: Instances use distributed locks to agree on a global start time. They arrive at the seed based on the difference between the current time and the start time.
 2.  **Rounded Local Time**: Instances use their local time, rounded to the window duration.
 3.  **Computed Seed**: Instances compute a monotonically increasing seed and coordinate via distributed locks.
 
@@ -73,7 +73,7 @@ Field: {col_id}:time  -> Value: {timestamp}   (int)
 
 **Update Semantics:**
 - **Probability**: Uses `HINCRBYFLOAT` for atomic incremental updates.
-- **Timestamp**: Uses "Last-Write-Wins" semantics. To enforce a 'Max-Timestamp-Wins' strategy, we can use a Lua script to perform a compare-and-swap operation.
+- **Timestamp**: `Max-Timestamp-Wins` strategy - implemented by a Lua Script/Transaction to perform a compare and swap on the variable. This might introduce additional latency when compared with the `Last-Writer-Wins` strategy.
 
 #### Service Contract
 ```go
@@ -102,11 +102,10 @@ struct OverwriteBucket {
 // RespBucket contains the aggregated state for a seed
 struct RespBucket {
     seed       uint64
-    startUTCNs uint64
     updates    []OverwriteBucket
 }
 
-// StorageService API
+// StorageService API - All APIs are non-blocking
 interface StorageService {
     // Async request for buckets. Triggers background fetch.
     Request(ctx context.Context, seed uint64)
@@ -131,10 +130,11 @@ Instances periodically `Request` the state they want to consume and `Recv` the a
 The Storage Service batches updates to prevent overwhelming the centralized store with network round-trips.
 
 #### TTL & Memory Management
-All keys created in the central store are set with an appropriate Time-To-Live (TTL) to automatically expire old data. The Keys can be set with 3x the time window duration.
+All keys created in the central store are set with an appropriate Time-To-Live (TTL) to automatically expire old data. The Keys can be set with 3x the time window duration, the rationale here being beyond the 3x TTL the keys that are being used will have lost its use.
 
 #### Failure Model
-- **Redis Unavailability**: If the centralized store is unreachable, FAIR instances degrade gracefully by functioning with their local state. Convergence stops, but availability is maintained.
+- **Redis Unavailability**: If the centralized store is unreachable, FAIR instances degrade gracefully by functioning with their local state. Convergence stops, but availability is maintained. Any transient failures are retried before the updates are to be dropped. 
+
 
 ## Alternatives Considered
 **Peer-to-Peer Communication**: A P2P model without a centralized state was considered. This is not pursued at this time due to the implementation complexity.
@@ -168,3 +168,7 @@ To improve performance for new instances, we can maintain a "start seed" in the 
 
 ### Alternative Storage
 Support for other storage backends or peer-to-peer state sharing can be added if the centralized Redis approach becomes a bottleneck.
+
+### Recovery from failures
+Currently the logic for applying the aggregated state on to local instance  always involve an overwrite. In certain cases, when the local state is more valuable, overwriting the aggregated state may not be the best behavior. This can be mitigated by introducing a weight - this can help defining additional squashing behavior.
+
