@@ -10,7 +10,7 @@ In a distributed deployment, all FAIR instances must converge on an eventually c
 - Ensure eventual consistency of shared state.
 
 ## Background / Problem Statement
-The core challenge is to distribute dynamic probability and timing data across all active FAIR instances efficiently.
+Distribute state across all active FAIR instances efficiently.
 
 ## Glossary
 - **Seed**: An initial seed value used to initialize the hash function for a time window. Rotating the seed periodically ensures that flows (Client IDs) hashed to the same bucket in one window are likely to land on different buckets with the new seed. This prevents a heavy flow from permanently penalizing a lighter flow due to hash collisions.
@@ -45,7 +45,7 @@ Bucket data has high cardinality (Space = `NumSeeds * NumCols * NumRows`). Each 
 ### Seed Identification Strategy
 To ensure all instances agree on the seed for a given time window, three options were evaluated:
 
-1.  **Commit Start Time**: Instances use distributed locks to agree on a global start time.
+1.  **Commit Start Time**: Instances use distributed locks to agree on a global start time, Arrive at a seed based on diff between the current time and the start time.
 2.  **Rounded Local Time**: Instances use their local time, rounded to the window duration.
 3.  **Computed Seed**: Instances compute a monotonically increasing seed and coordinate via distributed locks.
 
@@ -73,7 +73,7 @@ Field: {col_id}:time  -> Value: {timestamp}   (int)
 
 **Update Semantics:**
 - **Probability**: Uses `HINCRBYFLOAT` for atomic incremental updates.
-- **Timestamp**: Uses "Last-Write-Wins" semantics. To enforce a 'Max-Timestamp-Wins' strategy, we can use a Redis transaction (WATCH/MULTI/EXEC) or a Lua script to perform a compare-and-swap operation.
+- **Timestamp**: Uses "Last-Write-Wins" semantics. To enforce a 'Max-Timestamp-Wins' strategy, we can use a Lua script to perform a compare-and-swap operation.
 
 #### Service Contract
 ```go
@@ -111,14 +111,19 @@ interface StorageService {
     // Async request for buckets. Triggers background fetch.
     Request(ctx context.Context, seed uint64)
 
-    // Blocking call to retrieve updates.
-    // WARNING: Do not invoke from the main event loop.
-    Recv(ctx context.Context) ([]RespBucket, error)
+    // Returns a channel that receives updates.
+    Recv(ctx context.Context) <-chan []RespBucket
 
     // Commit local deltas to storage.
     Update(ctx context.Context, updates []Update) error
 }
 ```
+
+### Sharing the State
+FAIR instances commit the deltas to the centralized store. 
+
+### Consuming the state
+Instances periodically `Request` the state they want to consume and `Recv` the aggregated state from the Storage Service. These states are then applied to the local state.
 
 ### Optimization & Reliability
 
@@ -156,18 +161,10 @@ All keys created in the central store are set with an appropriate Time-To-Live (
 - **Update Latency**: Track the time taken to commit batches to Redis.
 - **Queue Depth**: Monitor the size of the pending update queue in the Storage Service.
 
-## Rollout
-- Deploy Redis infrastructure.
-- Deploy updated FAIR instances with Storage Service enabled (potentially behind a feature flag).
-- Verify connectivity and convergence.
-
-## Community Impact
-- None. This change is internal to the FAIR system operation.
-
 ## Future Enhancements
 
 ### Cold Start Optimization
-To improve performance for new instances, we can maintain a "rolling active seed" in the central store. New instances can pull this aggregated history immediately upon startup rather than building state from scratch.
+To improve performance for new instances, we can maintain a "start seed" in the central store. New instances can pull this aggregated history immediately upon startup rather than building state from scratch.
 
 ### Alternative Storage
 Support for other storage backends or peer-to-peer state sharing can be added if the centralized Redis approach becomes a bottleneck.
