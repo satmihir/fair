@@ -133,8 +133,7 @@ The Storage Service batches updates to prevent overwhelming the centralized stor
 All keys created in the central store are set with an appropriate Time-To-Live (TTL) to automatically expire old data. The Keys can be set with 3x the time window duration, the rationale here being beyond the 3x TTL the keys that are being used will have lost its use.
 
 #### Failure Model
-- **Redis Unavailability**: If the centralized store is unreachable, FAIR instances degrade gracefully by functioning with their local state. Convergence stops, but availability is maintained. Any transient failures are retried before the updates are to be dropped. 
-
+- **Redis Unavailability**: If the centralized store is unreachable, FAIR instances degrade gracefully by functioning with their local state. Convergence stops, but availability is maintained. Any transient failures are retried before the updates are dropped. 
 
 ## Alternatives Considered
 **Peer-to-Peer Communication**: A P2P model without a centralized state was considered. This is not pursued at this time due to the implementation complexity.
