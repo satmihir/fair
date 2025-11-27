@@ -50,7 +50,7 @@ To ensure all instances agree on the seed for a given time window, three options
 3.  **Computed Seed**: Instances compute a monotonically increasing seed and coordinate via distributed locks.
 
 We chose **Option 2 (Rounded Local Time)**.
-- **Assumption**: Clocks across instances are synchronized (or) within a acceptable skew (~ <10% of the window duration)
+- **Assumption**: Clocks across instances are synchronized (or) within a acceptable skew (~ <10% of the window duration). 
 - **Benefit**: Simplifies design by avoiding distributed locks and complex coordination.
 
 ### Data Storage & Schema
@@ -78,7 +78,7 @@ Field: {col_id}:time  -> Value: {timestamp}   (int)
 #### Service Contract
 ```go
 // BucketDelta represents a change to a specific bucket
-struct BucketDelta {
+type BucketDelta struct {
     rowID            uint64
     colID            uint64
     deltaProb        float64 // Increment/Decrement value
@@ -86,13 +86,13 @@ struct BucketDelta {
 }
 
 // Update contains the seed and a batch of bucket changes
-struct Update {
+type Update struct {
     seed    uint64
     updates []BucketDelta
 }
 
 // OverwriteBucket represents the absolute state of a bucket
-struct OverwriteBucket {
+type OverwriteBucket  struct {
     rowID            uint64
     colID            uint64
     prob             float64
@@ -100,17 +100,18 @@ struct OverwriteBucket {
 }
 
 // RespBucket contains the aggregated state for a seed
-struct RespBucket {
+type RespBucket struct{
     seed       uint64
     updates    []OverwriteBucket
 }
 
 // StorageService API - All APIs are non-blocking
+// Users invoke `Update` to provide the update they want to commit on the central structure, 'Request` for buckets for a speicifc seed. The values fetched from the central store are returned back through Recv channel. There are two types of values fetched, one as a result of `Request` - best effort, and the ones which are `Updated` - hot keys.
 interface StorageService {
-    // Async request for buckets. Triggers background fetch.
+    // Async request for buckets for a seed, they values are returned through the Recv-channel async. 
     Request(ctx context.Context, seed uint64)
 
-    // Returns a channel that receives updates. Recv() returns the singleton receieve channel for the lifetime for the Storage Service.
+    // Returns a channel that receives updates. Recv() returns the singleton receive channel for the lifetime for the Storage Service.
     Recv(ctx context.Context) <-chan []RespBucket
 
     // Commit local deltas to storage.
@@ -130,7 +131,7 @@ Instances periodically `Request` the state they want to consume and `Recv` the a
 The Storage Service batches updates to prevent overwhelming the centralized store with network round-trips.
 
 #### TTL & Memory Management
-All keys created in the central store are set with an appropriate Time-To-Live (TTL) to automatically expire old data. The Keys can be set with 3x the time window duration, the rationale here being beyond the 3x TTL the keys that are being used will have lost its use.
+All keys created in the central store are set with an appropriate Time-To-Live (TTL) to automatically expire old data. The Keys can be set with 3x the time window duration, the rationale here being beyond the 3x TTL the keys will no longer be needed.
 
 #### Failure Model
 - **Redis Unavailability**: If the centralized store is unreachable, FAIR instances degrade gracefully by functioning with their local state. Convergence stops, but availability is maintained. Any transient failures are retried with backoff and jitter before the updates are dropped.
