@@ -106,7 +106,9 @@ type RespBucket struct{
 }
 
 // StorageService API - All APIs are non-blocking
-// Users invoke `Update` to provide the update they want to commit on the central structure, 'Request` for buckets for a speicifc seed. The values fetched from the central store are returned back through Recv channel. There are two types of values fetched, one as a result of `Request` - best effort, and the ones which are `Updated` - hot keys.
+// Users invoke `Update` to commit local state deltas to the central store, and `Request` to fetch buckets for a specific seed. 
+// Values fetched from the central store are returned asynchronously through the `Recv` channel. 
+// There are two types of responses: those resulting from `Request` calls (best-effort periodic pulls) and those from `Update` operations (hot keys that were recently modified).
 interface StorageService {
     // Async request for buckets for a seed, they values are returned through the Recv-channel async. 
     Request(ctx context.Context, seed uint64)
