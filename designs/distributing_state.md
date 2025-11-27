@@ -40,7 +40,7 @@ We have two types of data:
 1. **Seed**: The current hash seed for the time window.
 2. **Bucket**: The probability and timestamp data.
 
-Bucket data has high cardinality (Space = `NumSeeds * NumCols * NumRows`). Each bucket contains a probability value and a "last update time" timestamp.
+Bucket data has high cardinality (Space = `NumSeeds * NumCols * NumRows`). Each bucket contains a probability value and a `lastUpdateTimeMs`
 
 ### Seed Identification Strategy
 To ensure all instances agree on the seed for a given time window, three options were evaluated:
@@ -88,7 +88,7 @@ type BucketDelta struct {
 // Update contains the seed and a batch of bucket changes
 type Update struct {
     seed    uint64
-    updates []BucketDelta
+    deltas []BucketDelta
 }
 
 // OverwriteBucket represents the absolute state of a bucket
@@ -110,13 +110,13 @@ type RespBucket struct{
 // Values fetched from the central store are returned asynchronously through the `Recv` channel. 
 // There are two types of responses: those resulting from `Request` calls (best-effort periodic pulls) and those from `Update` operations (hot keys that were recently modified).
 interface StorageService {
-    // Async request for buckets for a seed, they values are returned through the Recv-channel async. 
+    // Async request for buckets for a seed. Respones for this as shared through a single recv channel.
     Request(ctx context.Context, seed uint64)
 
     // Returns a channel that receives updates. Recv() returns the singleton receive channel for the lifetime for the Storage Service.
     Recv(ctx context.Context) <-chan []RespBucket
 
-    // Commit local deltas to storage.
+    // Commit local deltas to storage. Returns Error when queue is full.
     Update(ctx context.Context, updates []Update) error
 }
 ```
@@ -177,11 +177,11 @@ Currently the logic for applying the aggregated state onto local instance  alway
 ## Race between Update and Request
 A race condition can occur when an instance commits a large delta:
 
-Instance computes a large local delta and commits it to the Storage Service
-Storage Service queues the delta for async write to the centralized store
-Before the write completes, the Storage Service fetches aggregated state for the same key
-The fetched aggregated state doesn't yet reflect the pending delta
-If the squashing logic uses simple overwrite, the local state (containing the delta) gets replaced by stale aggregated state (missing the delta)
+1) Instance computes a large local delta and commits it to the Storage Service
+2) Storage Service queues the delta for async write to the centralized store
+3) Before the write completes, the Storage Service fetches aggregated state for the same key
+4) The fetched aggregated state doesn't yet reflect the pending delta
+5) If the squashing logic uses simple overwrite, the local state (containing the delta) gets replaced by stale aggregated state (missing the delta)
 ### Current Mitigation Strategy
 
 The design assumes that once the delta is successfully written to the centralized store, a subsequent fetch will retrieve the updated value through the Recv channel, which will then overwrite the local state. This approach is based on the principle that the centralized store's aggregated view—reflecting contributions from all instances—is more authoritative than any single instance's local state.
