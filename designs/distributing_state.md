@@ -10,7 +10,7 @@ In a distributed deployment, all FAIR instances must converge on an eventually c
 - Ensure eventual consistency of shared state.
 
 ## Background / Problem Statement
-Distribute state across all active FAIR instances efficiently.
+Distribute state across all active FAIR instances efficiently. This is important to scale FAIR to support a higher throughput of FAIR requests.
 
 ## Glossary
 - **Seed**: An initial seed value used to initialize the hash function for a time window. Rotating the seed periodically ensures that flows (Client IDs) hashed to the same bucket in one window are likely to land on different buckets with the new seed. This prevents a heavy flow from permanently penalizing a lighter flow due to hash collisions.
@@ -50,13 +50,13 @@ To ensure all instances agree on the seed for a given time window, three options
 3.  **Computed Seed**: Instances compute a monotonically increasing seed and coordinate via distributed locks.
 
 We chose **Option 2 (Rounded Local Time)**.
-- **Assumption**: Clocks across instances are synchronized.
+- **Assumption**: Clocks across instances are synchronized (or) within a acceptable skew (~ <10% of the window duration)
 - **Benefit**: Simplifies design by avoiding distributed locks and complex coordination.
 
 ### Data Storage & Schema
 
 #### Storage Service
-A `Storage Service` layer wraps the underlying KV store to decouple the application logic from storage implementation. This service handles batching and ensures updates do not block the hot path.
+A `Storage Service` layer wraps the underlying KV store to decouple the application logic from storage implementation. This service handles batching and ensures updates do not block the hot path. This offers a singleton storage service for the FAIR instance.
 
 - **Hot Path**: APIs are invoked asynchronously.
 - **Synchronization**: A background process ensures updates are committed to the central store.
@@ -110,7 +110,7 @@ interface StorageService {
     // Async request for buckets. Triggers background fetch.
     Request(ctx context.Context, seed uint64)
 
-    // Returns a channel that receives updates.
+    // Returns a channel that receives updates. Recv() returns the singleton receieve channel for the lifetime for the Storage Service.
     Recv(ctx context.Context) <-chan []RespBucket
 
     // Commit local deltas to storage.
@@ -122,7 +122,7 @@ interface StorageService {
 FAIR instances commit the deltas to the centralized store. 
 
 ### Consuming the state
-Instances periodically `Request` the state they want to consume and `Recv` the aggregated state from the Storage Service. These states are then applied to the local state.
+Instances periodically `Request` the state they want to consume and `Recv` the aggregated state from the Storage Service. These states overwrite the local state.
 
 ### Optimization & Reliability
 
@@ -133,7 +133,7 @@ The Storage Service batches updates to prevent overwhelming the centralized stor
 All keys created in the central store are set with an appropriate Time-To-Live (TTL) to automatically expire old data. The Keys can be set with 3x the time window duration, the rationale here being beyond the 3x TTL the keys that are being used will have lost its use.
 
 #### Failure Model
-- **Redis Unavailability**: If the centralized store is unreachable, FAIR instances degrade gracefully by functioning with their local state. Convergence stops, but availability is maintained. Any transient failures are retried before the updates are dropped. 
+- **Redis Unavailability**: If the centralized store is unreachable, FAIR instances degrade gracefully by functioning with their local state. Convergence stops, but availability is maintained. Any transient failures are retried with backoff and jitter before the updates are dropped.
 
 ## Alternatives Considered
 **Peer-to-Peer Communication**: A P2P model without a centralized state was considered. This is not pursued at this time due to the implementation complexity.
@@ -169,5 +169,5 @@ To improve performance for new instances, we can maintain a "start seed" in the 
 Support for other storage backends or peer-to-peer state sharing can be added if the centralized Redis approach becomes a bottleneck.
 
 ### Recovery from failures
-Currently the logic for applying the aggregated state on to local instance  always involve an overwrite. In certain cases, when the local state is more valuable, overwriting the aggregated state may not be the best behavior. This can be mitigated by introducing a weight - this can help defining additional squashing behavior.
+Currently the logic for applying the aggregated state onto local instance  always involve an overwrite. In certain cases, when the local state is more valuable, overwriting the aggregated state may not be the best behavior. This can be mitigated by introducing a weight - this can help defining additional squashing behavior.
 
