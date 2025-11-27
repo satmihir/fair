@@ -18,11 +18,11 @@ Distribute state across all active FAIR instances efficiently. This is important
 ## Requirements
 
 ### Functional
-- **Push**: Instances must be able to push local state deltas to the central store.
-- **Pull**: Instances must be able to fetch the aggregated state from the central store.
+- **Push**: Instances must be able to push local state deltas to the centralized store.
+- **Pull**: Instances must be able to fetch the aggregated state from the centralized store.
 
 ### Non-Functional
-- **Availability**: The system must continue to function (using local state) even if the central store is unavailable.
+- **Availability**: The system must continue to function (using local state) even if the centralized store is unavailable.
 - **Scalability**: The solution should support multiple FAIR instances updating concurrently.
 - **Consistency**: The system guarantees eventual consistency for the shared state.
 
@@ -40,7 +40,7 @@ We have two types of data:
 1. **Seed**: The current hash seed for the time window.
 2. **Bucket**: The probability and timestamp data.
 
-Bucket data has high cardinality (Space = `NumSeeds * NumCols * NumRows`). Each bucket contains a probability value and a "last seen" timestamp.
+Bucket data has high cardinality (Space = `NumSeeds * NumCols * NumRows`). Each bucket contains a probability value and a "last update time" timestamp.
 
 ### Seed Identification Strategy
 To ensure all instances agree on the seed for a given time window, three options were evaluated:
@@ -174,3 +174,23 @@ Support for other storage backends or peer-to-peer state sharing can be added if
 ### Recovery from failures
 Currently the logic for applying the aggregated state onto local instance  always involve an overwrite. In certain cases, when the local state is more valuable, overwriting the aggregated state may not be the best behavior. This can be mitigated by introducing a weight - this can help defining additional squashing behavior.
 
+## Race between Update and Request
+A race condition can occur when an instance commits a large delta:
+
+Instance computes a large local delta and commits it to the Storage Service
+Storage Service queues the delta for async write to the centralized store
+Before the write completes, the Storage Service fetches aggregated state for the same key
+The fetched aggregated state doesn't yet reflect the pending delta
+If the squashing logic uses simple overwrite, the local state (containing the delta) gets replaced by stale aggregated state (missing the delta)
+### Current Mitigation Strategy
+
+The design assumes that once the delta is successfully written to the centralized store, a subsequent fetch will retrieve the updated value through the Recv channel, which will then overwrite the local state. This approach is based on the principle that the centralized store's aggregated view—reflecting contributions from all instances—is more authoritative than any single instance's local state.
+
+### Alternative Approach
+
+This race condition can be avoided by using smarter squashing logic instead of blind overwrite. For example:
+
+Merge strategy: Combine local deltas with fetched state rather than replacing
+Timestamp-based reconciliation: Only apply fetched state if it's newer than local updates
+Tracking pending writes: Don't apply fetched state for keys with in-flight updates
+The choice of squashing strategy depends on whether we prioritize eventual consistency (overwrite with centralized state) or preserving local updates (merge/reconcile).
