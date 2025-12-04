@@ -80,3 +80,12 @@ For more details on contributing, refer to [CONTRIBUTING.md](./CONTRIBUTING.md).
 3.  **Refactoring**:
     - Ensure `golangci-lint` passes after refactoring.
     - Watch out for `revive` warnings regarding variable naming and error handling.
+
+## Maintenance
+
+This file should be updated whenever:
+- The directory structure changes.
+- New tools or linter rules are added.
+- The build or test commands change.
+
+Please keep this guide up-to-date to ensure it remains a single source of truth for agents.
