@@ -213,6 +213,7 @@ For horizontal scaling, the State Service can be replicated using a **Raft-based
 - **Authentication**: mTLS or token-based authentication for FAIR instances.
 - **Authorization**: All authenticated clients have equal access (no per-client ACLs needed).
 
+This is not covered in the doc and will be taken up in a future enhancement.
 ---
 
 ## Observability
