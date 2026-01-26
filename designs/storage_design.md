@@ -5,6 +5,11 @@ FAIR instances maintain state variables (probability and last update time) that 
 
 This document describes a **State Service** that aggregates state from all FAIR instances and broadcasts updates to all connected clients.
 
+### Deployment Topology
+The State Service is deployed as a **centralized service** (eg: k8 service). A single instance helps serve state for all the FAIR instances within a cluster. FAIR instances communicate with the State Service via bidirectional gRPC streams. Future versions may support multi-instance deployment using a consensus algorithm (e.g., Raft) for high availability.
+
+A sidecar deployment model (one State Service per FAIR instance) is not recommended, as it would require additional replication overhead to maintain shared state.
+
 ### Goals
 - Enable state sharing and consumption across all FAIR instances via a gRPC API.
 - Clients will come to an eventually consistent view of the buckets provided they are able to commit their deltas to the State Service and fetch the state.
@@ -21,7 +26,7 @@ Distribute state across all active FAIR instances efficiently. The State Service
 ## Requirements
 
 ### Functional
-- **Receive Deltas**: FAIR instances push local state deltas to the State Service, The state-service will aggregated the deltas
+- **Receive Deltas**: FAIR instances push local state deltas to the State Service. The State Service aggregates these deltas.
 - **Broadcast**: All connected clients receive updates for all changed buckets.
 
 ### Non-Functional
@@ -142,7 +147,7 @@ message Bucket {
 | Direction | Message | Behavior |
 |-----------|---------|----------|
 | **Client → Server** | `DeltaUpdate` | Server aggregates deltas into store, then broadcasts changed buckets to all clients. |
-| **Client → Server** | `StateRequest` | Server returns all non-default buckets for the requested seed. Used for cold start and seed rotation. |
+| **Client → Server** | `StateRequest` | Server returns all non-default bucket  for the requested seed. Used for cold start and seed rotation. |
 | **Server → Client** | `SyncResponse` | Contains buckets (sparse). Client overwrites local state. |
 
 ### Broadcast Behavior
