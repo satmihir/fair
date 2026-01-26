@@ -7,7 +7,7 @@ This document describes a **State Service** that aggregates state from all FAIR 
 
 ### Goals
 - Enable state sharing and consumption across all FAIR instances via a gRPC API.
-- Ensure eventual consistency of shared state.
+- Clients will come to an eventually consistent view of the buckets provided they are able to commit their deltas to the State Service and fetch the state.
 - Design for single-instance deployment initially, with a path to horizontal scaling.
 
 ## Background / Problem Statement
@@ -21,25 +21,22 @@ Distribute state across all active FAIR instances efficiently. The State Service
 ## Requirements
 
 ### Functional
-- **Push Deltas**: FAIR instances push local state deltas to the State Service.
-- **Receive Aggregated State**: FAIR instances can request for specific aggregate state - which will then be delivered to the FAIR instances.
+- **Receive Deltas**: FAIR instances push local state deltas to the State Service, The state-service will aggregated the deltas
 - **Broadcast**: All connected clients receive updates for all changed buckets.
 
 ### Non-Functional
 - **Availability**: FAIR instances degrade gracefully to local state if the State Service is unavailable.
 - **Scalability**: Single instance initially; design supports future horizontal scaling via replication.
-- **Consistency**: Eventual consistency for the shared state.
 
 ### Latency / Performance Targets
 - **Hot Path Impact**: Delta pushes from the hot path must be asynchronous and non-blocking (client-side concern).
-- **Update Propagation**: Changed buckets are broadcast to all clients immediately upon aggregation.
-- **Hot Key Prioritization**: Frequently updated buckets may be prioritized in broadcast ordering.
+- **Update Propagation**: Changed buckets are broadcast to all clients immediately upon aggregation by default; periodic batching (e.g., every 250ms) may be enabled for high-throughput scenarios.
+- **Static Stability**: In case the state service is unavailable, FAIR instances should continue to operate using their local state.
 
 ## Out of Scope
 - Client-side batching logic (how FAIR instances batch deltas before sending).
 - Request evaluation logic (how state is used to evaluate requests).
-
----
+- Hot Key Handling & Broadcast Batching: To avoid N² message amplification and hot-key starvation, the server may batch updates over a configurable window and prioritize broadcasts using randomized selection (e.g., Power-of-2 choices).
 
 ## Architecture
 
@@ -84,7 +81,7 @@ Value: {
 ### Aggregation Semantics
 | Field | Aggregation Strategy |
 |-------|---------------------|
-| **Probability** | Additive — deltas are summed. |
+| **Probability** | Additive — deltas are summed. **Clamped to [0.0, 1.0]** after aggregation. |
 | **Timestamp** | Max-Timestamp-Wins — latest timestamp is retained. |
 
 ---
@@ -107,7 +104,12 @@ service StateService {
 message SyncRequest {
   oneof request {
     DeltaUpdate delta_update = 1;
+    StateRequest state_request = 2;  // Request full state for a seed
   }
+}
+
+message StateRequest {
+  uint64 seed = 1;
 }
 
 message DeltaUpdate {
@@ -140,26 +142,80 @@ message Bucket {
 | Direction | Message | Behavior |
 |-----------|---------|----------|
 | **Client → Server** | `DeltaUpdate` | Server aggregates deltas into store, then broadcasts changed buckets to all clients. |
-| **Server → Client** | `SyncResponse` | Contains only buckets that changed since last broadcast. Sparse updates — client merges with local state. |
+| **Client → Server** | `StateRequest` | Server returns all non-default buckets for the requested seed. Used for cold start and seed rotation. |
+| **Server → Client** | `SyncResponse` | Contains buckets (sparse). Client overwrites local state. |
 
 ### Broadcast Behavior
 - When a delta arrives, the server:
   1. Aggregates the delta into the in-memory store.
-  2. Broadcasts the updated bucket(s) to **all** connected clients.
-- **Hot Key Prioritization**: Buckets with higher update frequency may be prioritized in broadcast ordering.
+  2. Broadcasts the updated bucket(s) to **all** connected clients. This can either be done right away (or) periodically (every 250ms) based on the configuration.
+
+---
+
+## Cold Start & Seed Rotation
+Clients explicitly request state when needed. This handles both cold start (new client) and seed rotation (new time window) uniformly.
+
+### Protocol
+
+Client sends `StateRequest{seed}` on the bidirectional stream:
+- **Cold start**: Client connects, computes current seed, requests state.
+- **Seed rotation**: Client detects new time window, computes new seed, requests state.
+
+Server responds with `SyncResponse` containing all non-default buckets for that seed.
+
+### Client Flow
+
+```
+1. COLD START
+   ├── Connect to State Service
+   ├── Compute current seed from local clock
+   ├── Send: StateRequest{seed: current_seed}
+   ├── Receive: SyncResponse{seed, buckets[]}
+   └── Overwrite local state
+
+2. STEADY STATE
+   ├── Receive broadcasts: SyncResponse{seed, buckets[]}
+   ├── Overwrite local state
+   └── Send local deltas: DeltaUpdate{seed, deltas[]}
+
+3. SEED ROTATION
+   ├── Detect time window change (local clock)
+   ├── Compute new seed
+   ├── Send: StateRequest{seed: new_seed}
+   ├── Receive: SyncResponse{seed, buckets[]}
+   └── Overwrite local state for that seed
+```
+
+### Why Explicit (Not Implicit)?
+
+| Approach | Problem |
+|----------|--------|
+| **Implicit (auto-send on connect)** | Server doesn't know client's clock/seed. Reconnecting clients receive redundant data. Doesn't help with seed rotation. |
+| **Explicit (client requests)** | Client controls what it needs. Works for cold start AND seed rotation. Avoids wasted bandwidth. |
+
+### Client Update Logic
+
+Clients use **blind overwrite** for all incoming state from the server:
+
+**Rationale:**
+- The server is the authoritative source — it aggregates all deltas from all clients.
+- Any local delta has already been sent to the server and will be reflected in future broadcasts.
+- Temporary regression during the race window is acceptable for FAIR's probabilistic use case.
+- Simpler logic to implement and reason about.
 
 ---
 
 ## Seed Lifecycle
 
 ### Seed Identification
-Seeds are determined by **rounded local time** — each time window produces a deterministic seed based on the current timestamp rounded to the window duration.
+Seeds are determined by **rounded local time** — each time window produces a deterministic seed based on the current timestamp rounded to the window duration. This also has the property that new seeds will be monotonically increasing helping with evicting stale entries.
 
 **Assumption**: Clocks across FAIR instances are synchronized (or within acceptable skew < 10% of window duration).
 
 ### TTL & Expiry
 - Buckets for stale seeds (older than `3 × window_duration`) are automatically evicted.
 - Eviction is handled by a background goroutine in the State Service.
+- Deltas received for evicted seeds are silently dropped.
 
 ---
 
@@ -168,10 +224,9 @@ Seeds are determined by **rounded local time** — each time window produces a d
 | Scenario | Behavior |
 |----------|----------|
 | **State Service unavailable** | FAIR instances degrade to local state. Convergence stops, availability maintained. |
-| **Client disconnect** | Server removes client from broadcast list. Client reconnects and resumes receiving updates. |
+| **Client disconnect** | Server removes client from broadcast list. Client reconnects, sends StateRequest to resync, and resumes receiving updates. |
 | **Backpressure / Overload** | gRPC flow control applies. Slow clients may miss intermediate updates but eventually receive latest state. |
-
----
+| **Client unable to invoke API** | Clients will attempt to send deltas to the State Service with bounded retry logic; deltas are dropped after retry exhaustion. |
 
 ## Storage Backend
 
@@ -197,14 +252,12 @@ type Store interface {
 }
 ```
 
----
+### Future: Horizontal Scaling
 
-## Future: Horizontal Scaling
-
-### Replication Strategy
+#### Replication Strategy
 For horizontal scaling, the State Service can be replicated using a **Raft-based consensus** or **eventually consistent replication** via etcd or a gossip protocol.
 
-> Note:Replication is a future enhancement. Initial deployment is single-instance.
+> Note: Replication is a future enhancement. Initial deployment is single-instance.
 
 ---
 
@@ -226,8 +279,6 @@ This is not covered in the doc and will be taken up in a future enhancement.
 | **Aggregation Latency** | Time from delta receipt to broadcast. |
 | **Store Size** | Number of buckets in memory. |
 
----
-
 ## Implementation Plan
 1. **Define Protobuf Schema**: Create `state.proto` with service and message definitions.
 2. **Implement In-Memory Store**: Thread-safe store with aggregation logic.
@@ -235,7 +286,8 @@ This is not covered in the doc and will be taken up in a future enhancement.
 4. **Implement gRPC Server**: Wire up `Sync` RPC with store and hub.
 5. **Integration**: Update FAIR instances to use State Service client.
 
----
+### Callout
+One minor change that needs to be addressed is the code to identify decays, it possible the l
 
 ## Testing
 - **Unit Tests**: Store aggregation logic, broadcast fan-out.
@@ -244,40 +296,33 @@ This is not covered in the doc and will be taken up in a future enhancement.
 
 ---
 
-## Appendix: Race Condition Mitigation
+## Appendix: Race Condition Analysis
 
-### The Problem
+### The Race Window
 
-A race condition can occur when a client's local delta is overwritten by a broadcast that doesn't yet reflect that delta.
+A brief inconsistency can occur when a client's local delta is overwritten by a broadcast that doesn't yet reflect that delta.
 
 **Timeline:**
 ```
 Client                          State Service
   │                                   │
   ├─── Apply delta locally ───────────┤
-  │    (bucket X: +0.1)               │
+  │    (local: 0.5 + 0.1 = 0.6)       │
   │                                   │
   ├─── Send delta to service ────────►│
   │                                   │
-  │◄── Broadcast for bucket X ────────┤  (from another client's earlier update)
-  │    (overwrites local state)       │
+  │◄── Broadcast (0.5) ───────────────┤  (doesn't include our delta yet)
+  │    (local overwrites to 0.5)      │
   │                                   │
-  │    X Local delta lost             │
+  │◄── Broadcast (0.6) ───────────────┤  (now includes our delta)
+  │    (local = 0.6) ✓                │
 ```
 
-**Why this matters:**
-- The broadcast may contain state from a concurrent update by another client.
-- This concurrent state could be more or less valuable than the local delta.
-- Blindly overwriting loses the client's contribution until the server eventually broadcasts the aggregated result.
+### Why This Is Acceptable
 
-### Mitigation Strategies
-
-| Strategy | Description |
-|----------|-------------|
-| **Timestamp comparison** | Only apply broadcast if `broadcast.timestamp > local.timestamp`. Ensures newer local updates are not overwritten by stale broadcasts. |
-| **Request count weighting** | Carry a count of requests contributing to each bucket. Clients can weight the broadcast value against local state based on contribution counts. |
-| **Commutative updates** | Since the probabilities are overwritten always allow probability increments but do not allow probability decrements. This ensures that the broadcasted value is always the latest aggregated value. |
-
-### Recommended Approach
-
-Start with **timestamp comparison** — simple and effective for most cases. The State Service always broadcasts the **latest aggregated value**, so any temporary inconsistency resolves quickly once the delta is applied server-side and re-broadcast.
+| Factor | Reasoning |
+|--------|----------|
+| **Race window is short** | Milliseconds between sending delta and receiving aggregated broadcast. |
+| **Delta is not lost** | Server has received it and will broadcast the aggregated result. |
+| **FAIR is probabilistic** | Temporary inconsistency in probability values has minimal impact on overall behavior. |
+| **Simplicity wins** | No timestamp tracking or merge logic required on client. |
