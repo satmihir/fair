@@ -3,6 +3,7 @@ package logger
 import (
 	"bytes"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"strings"
@@ -33,6 +34,31 @@ func (t *testLogger) Println(args ...any) {
 func (t *testLogger) Fatalf(format string, args ...any) {
 	msg := fmt.Sprintf(format, args...)
 	panic(msg)
+}
+
+type captureLogger struct {
+	printfCalled bool
+	printfFmt    string
+	printfArgs   []any
+	fatalfCalled bool
+	fatalfFmt    string
+	fatalfArgs   []any
+}
+
+func (c *captureLogger) Printf(format string, args ...any) {
+	c.printfCalled = true
+	c.printfFmt = format
+	c.printfArgs = append([]any(nil), args...)
+}
+
+func (c *captureLogger) Print(_ ...any) {}
+
+func (c *captureLogger) Println(_ ...any) {}
+
+func (c *captureLogger) Fatalf(format string, args ...any) {
+	c.fatalfCalled = true
+	c.fatalfFmt = format
+	c.fatalfArgs = append([]any(nil), args...)
 }
 
 func TestStdLogger_Print_VariousInputs(t *testing.T) {
@@ -319,4 +345,90 @@ func TestSetLogger(t *testing.T) {
 			tt.validate(t)
 		})
 	}
+}
+
+func TestNoOpLoggerMethods(t *testing.T) {
+	n := &noOpLogger{}
+	require.NotPanics(t, func() { n.Printf("x=%d", 1) })
+	require.NotPanics(t, func() { n.Print("hello") })
+	require.NotPanics(t, func() { n.Println("hello") })
+	require.NotPanics(t, func() { n.Fatalf("fatal: %s", "noop") })
+}
+
+func TestNewStdLogger(t *testing.T) {
+	l := NewStdLogger()
+	require.NotNil(t, l)
+	_, ok := l.(*stdLogger)
+	require.True(t, ok)
+}
+
+func TestGlobalPrintfUsesConfiguredLogger(t *testing.T) {
+	prev := GetLogger()
+	cl := &captureLogger{}
+	SetLogger(cl)
+	t.Cleanup(func() {
+		SetLogger(prev)
+	})
+
+	Printf("value=%d", 7)
+
+	require.True(t, cl.printfCalled)
+	require.Equal(t, "value=%d", cl.printfFmt)
+	require.Equal(t, []any{7}, cl.printfArgs)
+}
+
+func TestGlobalFatalfUsesConfiguredLogger(t *testing.T) {
+	prev := GetLogger()
+	cl := &captureLogger{}
+	SetLogger(cl)
+	t.Cleanup(func() {
+		SetLogger(prev)
+	})
+
+	Fatalf("problem=%s", "x")
+
+	require.True(t, cl.fatalfCalled)
+	require.Equal(t, "problem=%s", cl.fatalfFmt)
+	require.Equal(t, []any{"x"}, cl.fatalfArgs)
+}
+
+func TestStdLoggerFatalfUsesInjectedFunc(t *testing.T) {
+	prevFatalf := stdLoggerFatalf
+	t.Cleanup(func() {
+		stdLoggerFatalf = prevFatalf
+	})
+
+	var called bool
+	stdLoggerFatalf = func(_ *log.Logger, format string, args ...any) {
+		called = true
+		require.Equal(t, "fatal=%s", format)
+		require.Equal(t, []any{"boom"}, args)
+	}
+
+	s := &stdLogger{
+		l: log.New(os.Stderr, "fair: ", 0),
+	}
+	s.Fatalf("fatal=%s", "boom")
+	require.True(t, called)
+}
+
+func TestDefaultStdLoggerFatalfCallsExit(t *testing.T) {
+	prevExit := stdLoggerExit
+	t.Cleanup(func() {
+		stdLoggerExit = prevExit
+	})
+
+	var exitCode int
+	stdLoggerExit = func(code int) {
+		exitCode = code
+		panic("exit-called")
+	}
+
+	require.PanicsWithValue(t, "exit-called", func() {
+		s := &stdLogger{
+			l: log.New(io.Discard, "fair: ", 0),
+		}
+		s.Fatalf("fatal=%s", "boom")
+	})
+	require.Equal(t, 1, exitCode)
 }

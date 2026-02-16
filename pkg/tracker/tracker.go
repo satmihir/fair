@@ -32,6 +32,15 @@ type FairnessTracker struct {
 	stopRotation chan struct{}
 }
 
+var newTrackerStructureWithClock = func(
+	trackerConfig *config.FairnessTrackerConfig,
+	id uint64,
+	includeStats bool,
+	clock utils.IClock,
+) (request.Tracker, error) {
+	return data.NewStructureWithClock(trackerConfig, id, includeStats, clock)
+}
+
 // NewFairnessTrackerWithClockAndTicker creates a FairnessTracker using the
 // provided clock and ticker. It is primarily used for tests and simulations
 // where time needs to be controlled.
@@ -42,13 +51,13 @@ func NewFairnessTrackerWithClockAndTicker(trackerConfig *config.FairnessTrackerC
 	if trackerConfig == nil {
 		return nil, NewFairnessTrackerError(nil, "trackerConfig must not be nil")
 	}
-	st1, err := data.NewStructureWithClock(trackerConfig, 1, trackerConfig.IncludeStats, clock)
+	st1, err := newTrackerStructureWithClock(trackerConfig, 1, trackerConfig.IncludeStats, clock)
 	if err != nil {
 		logger.Printf("error in creating first tracker : %v", err)
 		return nil, NewFairnessTrackerError(err, "Failed to create a structure")
 	}
 
-	st2, err := data.NewStructureWithClock(trackerConfig, 2, trackerConfig.IncludeStats, clock)
+	st2, err := newTrackerStructureWithClock(trackerConfig, 2, trackerConfig.IncludeStats, clock)
 	if err != nil {
 		logger.Printf("error in creating second tracker : %v", err)
 		return nil, NewFairnessTrackerError(err, "Failed to create a structure")
@@ -77,7 +86,7 @@ func NewFairnessTrackerWithClockAndTicker(trackerConfig *config.FairnessTrackerC
 			case <-stopRotation:
 				return
 			case <-ticker.C():
-				s, err := data.NewStructureWithClock(trackerConfig, ft.structureIDCounter, trackerConfig.IncludeStats, clock)
+				s, err := newTrackerStructureWithClock(trackerConfig, ft.structureIDCounter, trackerConfig.IncludeStats, clock)
 				if err != nil {
 					logger.Fatalf("failed to create a structure during rotation: %v", err)
 					return
