@@ -44,12 +44,13 @@ jobs:
     - name: Test
       run: |
         go test -v ./... -covermode=count -coverprofile=coverage.out
-        go tool cover -func=coverage.out -o=coverage.out
+        grep -vE 'pkg/serialization/.*\.pb\.go:' coverage.out > coverage.filtered.out
+        go tool cover -func=coverage.filtered.out -o=coverage.filtered.out
 
     - name: Go Coverage Badge
       uses: tj-actions/coverage-badge-go@v2.4.2
       with:
-        filename: coverage.out
+        filename: coverage.filtered.out
 
     - name: Verify Changed files
       uses: tj-actions/verify-changed-files@v16
@@ -72,4 +73,3 @@ jobs:
         github_token: ${{ github.token }}
         branch: ${{ github.head_ref }}
         force: true
-
