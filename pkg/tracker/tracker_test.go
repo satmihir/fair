@@ -2,13 +2,18 @@ package tracker
 
 import (
 	"context"
-	"github.com/satmihir/fair/pkg/testutils"
+	"fmt"
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
-
+	"github.com/satmihir/fair/pkg/config"
+	"github.com/satmihir/fair/pkg/logger"
 	"github.com/satmihir/fair/pkg/request"
+	"github.com/satmihir/fair/pkg/testutils"
+	"github.com/satmihir/fair/pkg/utils"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestEndToEnd(t *testing.T) {
@@ -90,4 +95,130 @@ func TestNewFairnessTrackerWithClockAndTicker_NilConfig(t *testing.T) {
 	if assert.Error(t, err) {
 		assert.Contains(t, err.Error(), "trackerConfig must not be nil")
 	}
+}
+
+type fakeTicker struct {
+	ch      chan time.Time
+	stopped bool
+}
+
+func newFakeTicker() *fakeTicker {
+	return &fakeTicker{
+		ch: make(chan time.Time, 1),
+	}
+}
+
+func (f *fakeTicker) C() <-chan time.Time {
+	return f.ch
+}
+
+func (f *fakeTicker) Stop() {
+	f.stopped = true
+}
+
+type fakeTracker struct {
+	id uint64
+}
+
+func (f *fakeTracker) GetID() uint64 {
+	return f.id
+}
+
+func (f *fakeTracker) RegisterRequest(_ context.Context, _ []byte) *request.RegisterRequestResult {
+	return &request.RegisterRequestResult{}
+}
+
+func (f *fakeTracker) ReportOutcome(_ context.Context, _ []byte, _ request.Outcome) *request.ReportOutcomeResult {
+	return &request.ReportOutcomeResult{}
+}
+
+func (f *fakeTracker) Close() {}
+
+type fatalCaptureLogger struct {
+	fatalCh chan string
+}
+
+func (l *fatalCaptureLogger) Printf(_ string, _ ...any) {}
+func (l *fatalCaptureLogger) Print(_ ...any)            {}
+func (l *fatalCaptureLogger) Println(_ ...any)          {}
+func (l *fatalCaptureLogger) Fatalf(format string, args ...any) {
+	select {
+	case l.fatalCh <- fmt.Sprintf(format, args...):
+	default:
+	}
+}
+
+func TestNewFairnessTrackerWithClockAndTicker_FirstStructureError(t *testing.T) {
+	prevConstructor := newTrackerStructureWithClock
+	t.Cleanup(func() {
+		newTrackerStructureWithClock = prevConstructor
+	})
+
+	newTrackerStructureWithClock = func(_ *config.FairnessTrackerConfig, _ uint64, _ bool, _ utils.IClock) (request.Tracker, error) {
+		return nil, fmt.Errorf("first structure failed")
+	}
+
+	ft, err := NewFairnessTrackerWithClockAndTicker(config.DefaultFairnessTrackerConfig(), nil, nil)
+	require.Nil(t, ft)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Failed to create a structure")
+}
+
+func TestNewFairnessTrackerWithClockAndTicker_SecondStructureError(t *testing.T) {
+	prevConstructor := newTrackerStructureWithClock
+	t.Cleanup(func() {
+		newTrackerStructureWithClock = prevConstructor
+	})
+
+	call := 0
+	newTrackerStructureWithClock = func(_ *config.FairnessTrackerConfig, id uint64, _ bool, _ utils.IClock) (request.Tracker, error) {
+		call++
+		if call == 1 {
+			return &fakeTracker{id: id}, nil
+		}
+		return nil, fmt.Errorf("second structure failed")
+	}
+
+	ft, err := NewFairnessTrackerWithClockAndTicker(config.DefaultFairnessTrackerConfig(), nil, nil)
+	require.Nil(t, ft)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Failed to create a structure")
+}
+
+func TestNewFairnessTrackerWithClockAndTicker_RotationStructureError(t *testing.T) {
+	prevConstructor := newTrackerStructureWithClock
+	prevLogger := logger.GetLogger()
+	t.Cleanup(func() {
+		newTrackerStructureWithClock = prevConstructor
+		logger.SetLogger(prevLogger)
+	})
+
+	fatalCh := make(chan string, 1)
+	logger.SetLogger(&fatalCaptureLogger{fatalCh: fatalCh})
+
+	call := 0
+	newTrackerStructureWithClock = func(_ *config.FairnessTrackerConfig, id uint64, _ bool, _ utils.IClock) (request.Tracker, error) {
+		call++
+		if call <= 2 {
+			return &fakeTracker{id: id}, nil
+		}
+		return nil, fmt.Errorf("rotation creation failed")
+	}
+
+	ticker := newFakeTicker()
+	ft, err := NewFairnessTrackerWithClockAndTicker(config.DefaultFairnessTrackerConfig(), nil, ticker)
+	require.NoError(t, err)
+	require.NotNil(t, ft)
+
+	ticker.ch <- time.Now()
+
+	select {
+	case msg := <-fatalCh:
+		require.Contains(t, msg, "failed to create a structure during rotation")
+	case <-time.After(500 * time.Millisecond):
+		t.Fatalf("expected fatal log during rotation failure")
+	}
+
+	ft.Close()
+	require.True(t, ticker.stopped)
 }

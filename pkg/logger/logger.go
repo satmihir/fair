@@ -24,6 +24,11 @@ var (
 	defaultNoOpLogger        = &noOpLogger{}
 	logger            Logger = defaultNoOpLogger
 	mx                sync.RWMutex
+	stdLoggerExit     = os.Exit
+	stdLoggerFatalf   = func(l *log.Logger, format string, args ...any) {
+		l.Printf(format, args...)
+		stdLoggerExit(1)
+	}
 )
 
 type stdLogger struct {
@@ -49,7 +54,7 @@ func (s *stdLogger) Println(args ...any) {
 }
 
 func (s *stdLogger) Fatalf(format string, args ...any) {
-	s.l.Fatalf(format, args...)
+	stdLoggerFatalf(s.l, format, args...)
 }
 
 // Replaces default logger with provided logger
