@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/durationpb"
 )
@@ -66,6 +67,67 @@ func TestSerialization(t *testing.T) {
 			t.Logf("Original Lambda: %f, Deserialized Lambda: %f", fairStruct.Cfg.Lambda, deserializedStruct.Cfg.Lambda)
 			t.Logf("Original HostGuid: %s, Deserialized HostGuid: %s", fairStruct.Meta.HostGuid, deserializedStruct.Meta.HostGuid)
 		}
+	})
+}
+
+func TestSerializerErrorPaths(t *testing.T) {
+	serializer := NewSerializer()
+
+	t.Run("Serialize nil input returns errNil", func(t *testing.T) {
+		data, err := serializer.Serialize(nil)
+		require.Nil(t, data)
+		require.ErrorIs(t, err, errNil)
+	})
+
+	t.Run("Serialize invalid UTF-8 returns marshal error", func(t *testing.T) {
+		fairStruct := createSampleFairStruct()
+		fairStruct.Cfg.TrackerId = string([]byte{0xff, 0xfe, 0xfd})
+
+		data, err := serializer.Serialize(fairStruct)
+		require.Nil(t, data)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "failed to marshal FairStruct")
+	})
+
+	t.Run("Deserialize empty data returns errEmptyData", func(t *testing.T) {
+		out, err := serializer.Deserialize(nil)
+		require.Nil(t, out)
+		require.ErrorIs(t, err, errEmptyData)
+	})
+
+	t.Run("Deserialize invalid bytes returns wrapped unmarshal error", func(t *testing.T) {
+		out, err := serializer.Deserialize([]byte{0xff, 0x00, 0x01, 0x02})
+		require.Nil(t, out)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "failed to unmarshal FairStruct")
+	})
+
+	t.Run("SerializeToJSON nil input returns errNil", func(t *testing.T) {
+		data, err := serializer.SerializeToJSON(nil)
+		require.Nil(t, data)
+		require.ErrorIs(t, err, errNil)
+	})
+
+	t.Run("SerializeToJSON invalid UTF-8 returns error", func(t *testing.T) {
+		fairStruct := createSampleFairStruct()
+		fairStruct.Meta.HostGuid = string([]byte{0xff, 0xfe, 0xfd})
+
+		data, err := serializer.SerializeToJSON(fairStruct)
+		require.Nil(t, data)
+		require.Error(t, err)
+	})
+
+	t.Run("DeserializeFromJSON empty data returns errEmptyData", func(t *testing.T) {
+		out, err := serializer.DeserializeFromJSON(nil)
+		require.Nil(t, out)
+		require.ErrorIs(t, err, errEmptyData)
+	})
+
+	t.Run("DeserializeFromJSON invalid JSON returns wrapped unmarshal error", func(t *testing.T) {
+		out, err := serializer.DeserializeFromJSON([]byte(`{"cfg":`))
+		require.NotNil(t, out)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "failed to unmarshal FairStruct from JSON")
 	})
 }
 

@@ -35,6 +35,8 @@ const (
 type FinalProbabilityFunction func([]float64) float64
 
 var (
+	generateTunedStructureConfig = GenerateTunedStructureConfig
+
 	// MinFinalProbabilityFunction returns the smallest probability in the
 	// slice. It is the default implementation used by the tracker.
 	MinFinalProbabilityFunction FinalProbabilityFunction = func(buckets []float64) float64 {
@@ -70,7 +72,7 @@ var (
 // DefaultFairnessTrackerConfig returns a configuration that should work well
 // for most applications without any additional tuning.
 func DefaultFairnessTrackerConfig() *FairnessTrackerConfig {
-	conf, err := GenerateTunedStructureConfig(
+	conf, err := generateTunedStructureConfig(
 		defaultExpectedClientFlows,
 		defaultBucketsPerLevel,
 		defaultTolerableBadRequestsPerBadFlow)
