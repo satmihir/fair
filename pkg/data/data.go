@@ -59,10 +59,10 @@ func NewStructureWithClock(config *config.FairnessTrackerConfig, id uint64, incl
 	}
 
 	levels := make([][]*bucket, config.L)
-	for i := 0; i < int(config.L); i++ {
+	for i := range levels {
 		levels[i] = make([]*bucket, config.M)
 
-		for j := 0; j < int(config.M); j++ {
+		for j := range levels[i] {
 			levels[i][j] = newBucket(clock)
 		}
 	}
@@ -118,11 +118,8 @@ func (s *Structure) RegisterRequest(_ context.Context, clientIdentifier []byte) 
 		stats.FinalProbability = pFinal
 	}
 
-	// Decide whether to throttle the request based on the probability
-	shouldThrottle := false
-	if rand.Float64() <= pFinal {
-		shouldThrottle = true
-	}
+	// Decide whether to throttle the request based on the probability.
+	shouldThrottle := rand.Float64() <= pFinal
 
 	return &request.RegisterRequestResult{
 		ShouldThrottle: shouldThrottle,
@@ -139,16 +136,7 @@ func (s *Structure) ReportOutcome(_ context.Context, clientIdentifier []byte, ou
 	}
 
 	s.visitBuckets(clientIdentifier, func(_ uint32, _ uint32, b *bucket) {
-		p := b.probability + adjustment
-		if p < 0 {
-			p = 0
-		}
-
-		if p > 1 {
-			p = 1
-		}
-
-		b.probability = p
+		b.probability = math.Max(0, math.Min(1, b.probability+adjustment))
 		b.lastUpdatedTimeMillis = s.currentMillis()
 	})
 
@@ -226,7 +214,7 @@ func generateNHashesUsing64Bit(input []byte, n uint32, seed uint32) []uint32 {
 
 	// Generate the n hashes using the combination: hash_i = hash1 + i * hash2
 	hashes := make([]uint32, n)
-	for i := 0; i < int(n); i++ {
+	for i := range hashes {
 		hashes[i] = hash1 + uint32(i)*hash2
 	}
 
