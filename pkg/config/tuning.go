@@ -114,10 +114,7 @@ func GenerateTunedStructureConfig(expectedClientFlows, bucketsPerLevel, tolerabl
 	}
 
 	M := uint32(math.Ceil(float64(expectedClientFlows) * percentBadClientFlows))
-	L := CalculateL(bucketsPerLevel, M, lowProbability)
-	if L < minL {
-		L = minL
-	}
+	L := max(CalculateL(bucketsPerLevel, M, lowProbability), minL)
 
 	// The probability to add per bad outcome so we fully block a flow after tolerable failures
 	Pi := 1 / float64(tolerableBadRequestsPerBadFlow)
