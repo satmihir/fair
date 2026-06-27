@@ -34,6 +34,22 @@ The core algorithm of FAIR is based on the [Stochastic Fair BLUE](https://rtcl.e
 
 In this example, 20 clients are competing for a resource that regenerates at the rate of 20/s (every data point in the graph is 5s apart). 18 out of 20 clients are "well-behaved" because they request a resource every second while the remaining two clients try to get a resource every 100ms which is an "unfair" rate. On the left, we see that when left unthrottled, the two unfair clients grab a disproportionately large amount of resource while the regular workloads starve and get a lot less than 1/s rate. On the right, when throttled with fair, the regular workloads stay virtually unaffected while the unfair ones get throttled. On average, even the unfair workloads get their fair share when seen over larger time periods.
 
+The deterministic evaluator in `cmd/fairness_eval` compares a shared token bucket with and without FAIR. It reports Jain's fairness index over each client's allocation relative to its max-min-fair entitlement, plus resource utilization as a throughput guardrail.
+
+```bash
+go run ./cmd/fairness_eval
+```
+
+Headline results with the default FAIR configuration:
+
+| Scenario | No FAIR Jain | FAIR Jain | Improvement | Utilization with FAIR |
+| --- | ---: | ---: | ---: | ---: |
+| API noisy neighbors | 0.2184 | 0.6673 | +205.5% | 99.97% |
+| Flash crowd | 0.9871 | 0.9778 | -0.9% | 99.96% |
+| Batch surge | 0.7497 | 0.9944 | +32.6% | 89.39% |
+
+For the API noisy-neighbor workload, a focused FAIR configuration sweep found materially higher fairness. The strongest practical point in the sweep used `MinFinalProbabilityFunction`, `tolerableBadRequestsPerBadFlow=60`, `Lambda=0`, and at least 1,500 buckets per level, reaching a Jain score of 0.8498 with 99.28% utilization. That is a +289.1% improvement over no FAIR and about +27.3% over the default FAIR configuration for this workload.
+
 ## Installation
 
 To install the FAIR library, use `go get`:
