@@ -49,6 +49,10 @@ Headline results with the default FAIR configuration:
 
 For the API noisy-neighbor workload, a focused FAIR configuration sweep found materially higher fairness. The strongest practical point in the sweep used `MinFinalProbabilityFunction`, `tolerableBadRequestsPerBadFlow=60`, `Lambda=0`, and at least 1,500 buckets per level, reaching a Jain score of 0.8498 with 99.28% utilization. That is a +289.1% improvement over no FAIR and about +27.3% over the default FAIR configuration for this workload.
 
+[![FAIR noisy-neighbor visual demo](demo/fairness_visual/fair-demo-thumbnail.png)](demo/fairness_visual/fair-demo.mp4)
+
+A browser-based visual demo for the noisy-neighbor case is available in `demo/fairness_visual`. Click the preview above to open the MP4.
+
 ## Installation
 
 To install the FAIR library, use `go get`:

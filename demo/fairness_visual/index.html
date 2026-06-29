@@ -1,0 +1,720 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>FAIR Noisy Neighbor Demo</title>
+  <style>
+    :root {
+      --ink: #18211f;
+      --muted: #60706b;
+      --panel: #f7faf9;
+      --line: #d8e2df;
+      --paper: #ffffff;
+      --danger: #d84f45;
+      --danger-soft: #f6d7d3;
+      --fair: #14966f;
+      --fair-soft: #d6f1e7;
+      --accent: #2d7dd2;
+      --warn: #d8991f;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      min-height: 100%;
+      margin: 0;
+      background: #eef3f1;
+      color: var(--ink);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    body {
+      display: grid;
+      place-items: center;
+      padding: 24px;
+    }
+
+    .stage {
+      width: min(100%, 1420px);
+      aspect-ratio: 16 / 9;
+      min-height: 620px;
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+      gap: 14px;
+    }
+
+    .titlebar {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 18px;
+      align-items: end;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(30px, 4vw, 58px);
+      line-height: 0.95;
+      letter-spacing: 0;
+    }
+
+    .subtitle {
+      margin: 8px 0 0;
+      color: var(--muted);
+      font-size: clamp(14px, 1.4vw, 18px);
+    }
+
+    .headline-metric {
+      display: grid;
+      grid-template-columns: auto auto auto;
+      align-items: baseline;
+      gap: 10px;
+      padding: 12px 14px;
+      border: 1px solid var(--line);
+      background: var(--paper);
+      border-radius: 8px;
+      white-space: nowrap;
+      box-shadow: 0 12px 30px rgba(31, 47, 43, 0.08);
+    }
+
+    .headline-metric span {
+      color: var(--muted);
+      font-size: 13px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .headline-metric strong {
+      font-size: clamp(24px, 3vw, 42px);
+      line-height: 1;
+    }
+
+    .arrow {
+      color: var(--fair);
+      font-weight: 800;
+    }
+
+    .panels {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+      min-height: 0;
+    }
+
+    .panel {
+      position: relative;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      background: var(--panel);
+      border-radius: 8px;
+      box-shadow: 0 18px 48px rgba(31, 47, 43, 0.09);
+    }
+
+    .panel.without {
+      border-top: 5px solid var(--danger);
+    }
+
+    .panel.with {
+      border-top: 5px solid var(--fair);
+    }
+
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+
+    .controls {
+      display: grid;
+      grid-template-columns: auto 1fr auto auto;
+      align-items: center;
+      gap: 12px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    button {
+      width: 42px;
+      height: 42px;
+      display: grid;
+      place-items: center;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--paper);
+      color: var(--ink);
+      font-size: 20px;
+      cursor: pointer;
+    }
+
+    button:hover {
+      border-color: #9eb1ab;
+    }
+
+    input[type="range"] {
+      width: 100%;
+      accent-color: var(--fair);
+    }
+
+    .note {
+      color: var(--muted);
+      white-space: nowrap;
+    }
+
+    body.recording {
+      padding: 0;
+      background: var(--paper);
+    }
+
+    body.recording .stage {
+      width: 100vw;
+      height: 100vh;
+      min-height: 0;
+      padding: 22px;
+    }
+
+    body.recording .controls {
+      display: none;
+    }
+
+    @media (max-width: 900px) {
+      body {
+        padding: 14px;
+      }
+
+      .stage {
+        aspect-ratio: auto;
+        min-height: 960px;
+      }
+
+      .titlebar {
+        grid-template-columns: 1fr;
+      }
+
+      .headline-metric {
+        justify-content: start;
+      }
+
+      .panels {
+        grid-template-columns: 1fr;
+      }
+
+      .note {
+        display: none;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="stage" aria-label="FAIR noisy neighbor resource allocation demo">
+    <section class="titlebar">
+      <div>
+        <h1>Noisy neighbors vs limited resources</h1>
+        <p class="subtitle">Same API traffic, same 100 req/s capacity. FAIR throttles only after real contention signals.</p>
+      </div>
+      <div class="headline-metric" aria-label="Headline Jain fairness improvement">
+        <span>Jain fairness</span>
+        <strong>0.218</strong>
+        <strong class="arrow">-> 0.850</strong>
+      </div>
+    </section>
+
+    <section class="panels" aria-label="Side by side comparison">
+      <article class="panel without">
+        <canvas id="withoutCanvas" width="900" height="620" aria-label="Without FAIR animation"></canvas>
+      </article>
+      <article class="panel with">
+        <canvas id="withCanvas" width="900" height="620" aria-label="With FAIR animation"></canvas>
+      </article>
+    </section>
+
+    <section class="controls" aria-label="Playback controls">
+      <button id="playButton" type="button" aria-label="Pause animation">||</button>
+      <input id="timeline" type="range" min="0" max="28" step="0.01" value="0" aria-label="Animation timeline">
+      <strong id="clock">00.0s</strong>
+      <span class="note">Use <code>?recording=1</code> for a clean capture view.</span>
+    </section>
+  </main>
+
+  <script>
+    const duration = 28;
+    const url = new URL(window.location.href);
+    const recording = url.searchParams.get("recording") === "1";
+    const fixedTime = url.searchParams.get("t");
+    const canvases = [
+      {
+        element: document.getElementById("withoutCanvas"),
+        mode: "without",
+        title: "Without FAIR",
+        label: "Noisy clients win the race",
+        jainStart: 0.96,
+        jainEnd: 0.218,
+        utilization: 99.99,
+        successes: "30,097",
+        resourceFailures: "56,781",
+        throttled: "0",
+        normalEnd: 0.31,
+        noisyEnd: 1.78,
+        color: "#d84f45",
+        softColor: "#f6d7d3"
+      },
+      {
+        element: document.getElementById("withCanvas"),
+        mode: "with",
+        title: "With FAIR",
+        label: "Contention is contained",
+        jainStart: 0.96,
+        jainEnd: 0.850,
+        utilization: 99.28,
+        successes: "29,883",
+        resourceFailures: "2,231",
+        throttled: "54,764",
+        normalEnd: 0.88,
+        noisyEnd: 1.07,
+        color: "#14966f",
+        softColor: "#d6f1e7"
+      }
+    ];
+
+    const playButton = document.getElementById("playButton");
+    const timeline = document.getElementById("timeline");
+    const clock = document.getElementById("clock");
+
+    let start = performance.now();
+    let paused = false;
+    let manualTime = fixedTime === null ? 0 : clamp(Number(fixedTime), 0, duration);
+
+    if (recording) {
+      document.body.classList.add("recording");
+    }
+
+    function clamp(value, min, max) {
+      return Math.min(max, Math.max(min, value));
+    }
+
+    function easeOutCubic(value) {
+      return 1 - Math.pow(1 - value, 3);
+    }
+
+    function easeInOut(value) {
+      return value < 0.5
+        ? 4 * value * value * value
+        : 1 - Math.pow(-2 * value + 2, 3) / 2;
+    }
+
+    function drawRoundedRect(ctx, x, y, w, h, r) {
+      const radius = Math.min(r, w / 2, h / 2);
+      ctx.beginPath();
+      ctx.moveTo(x + radius, y);
+      ctx.arcTo(x + w, y, x + w, y + h, radius);
+      ctx.arcTo(x + w, y + h, x, y + h, radius);
+      ctx.arcTo(x, y + h, x, y, radius);
+      ctx.arcTo(x, y, x + w, y, radius);
+      ctx.closePath();
+    }
+
+    function drawText(ctx, text, x, y, size, weight, color, align = "left") {
+      ctx.fillStyle = color;
+      ctx.font = `${weight} ${size}px Inter, ui-sans-serif, system-ui, sans-serif`;
+      ctx.textAlign = align;
+      ctx.textBaseline = "alphabetic";
+      ctx.fillText(text, x, y);
+    }
+
+    function lerp(a, b, p) {
+      return a + (b - a) * p;
+    }
+
+    function scenarioProgress(time) {
+      const burstDrainSeconds = 0.5;
+      const fullRampSeconds = 22;
+      if (time < burstDrainSeconds) return 0;
+      if (time > fullRampSeconds) return 1;
+      return (time - burstDrainSeconds) / (fullRampSeconds - burstDrainSeconds);
+    }
+
+    function drawMetric(ctx, label, value, x, y, w, color) {
+      drawText(ctx, label, x, y, 13, 700, "#60706b");
+      drawText(ctx, value, x, y + 30, 25, 800, color);
+      ctx.strokeStyle = "#d8e2df";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(x + w, y - 16);
+      ctx.lineTo(x + w, y + 36);
+      ctx.stroke();
+    }
+
+    function parseCount(value) {
+      return Number(String(value).replaceAll(",", ""));
+    }
+
+    function formatCount(value) {
+      return Math.round(value).toLocaleString("en-US");
+    }
+
+    function drawGauge(ctx, x, y, radius, value, color) {
+      const startAngle = Math.PI * 0.76;
+      const sweep = Math.PI * 1.48;
+      const clampedValue = clamp(value, 0, 1);
+
+      ctx.lineWidth = 10;
+      ctx.lineCap = "round";
+      ctx.strokeStyle = "#d8e2df";
+      ctx.beginPath();
+      ctx.arc(x, y, radius, startAngle, startAngle + sweep);
+      ctx.stroke();
+      ctx.strokeStyle = color;
+      ctx.beginPath();
+      ctx.arc(x, y, radius, startAngle, startAngle + sweep * clampedValue);
+      ctx.stroke();
+      drawText(ctx, value.toFixed(3), x, y + 5, 20, 850, "#18211f", "center");
+      drawText(ctx, "Jain index", x, y + 23, 9, 750, "#60706b", "center");
+    }
+
+    function drawTokenBucket(ctx, width, time, progress) {
+      const x = width / 2 - 78;
+      const y = 112;
+      const w = 156;
+      const h = 76;
+      drawRoundedRect(ctx, x, y, w, h, 8);
+      ctx.fillStyle = "#ffffff";
+      ctx.fill();
+      ctx.strokeStyle = "#9eb1ab";
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      drawText(ctx, "100 tokens/s", width / 2, y + 58, 20, 800, "#18211f", "center");
+
+      for (let i = 0; i < 20; i++) {
+        const px = x + 16 + (i % 10) * 13;
+        const py = y + 12 + Math.floor(i / 10) * 14;
+        ctx.beginPath();
+        ctx.arc(px + Math.sin(time * 2 + i) * 1.2, py, 4, 0, Math.PI * 2);
+        ctx.fillStyle = i / 20 < 0.5 + progress * 0.2 ? "#f0b429" : "#d8e2df";
+        ctx.fill();
+      }
+    }
+
+    function laneRows(mode) {
+      const rows = [];
+      for (let i = 0; i < 10; i++) {
+        rows.push({ type: "normal", index: i, label: "" });
+      }
+      for (let i = 0; i < 4; i++) {
+        rows.push({ type: "noisy", index: i, label: "" });
+      }
+      return rows;
+    }
+
+    function drawLanes(ctx, data, width, height, time, progress) {
+      const rows = laneRows(data.mode);
+      const x = 54;
+      const y = 260;
+      const barW = width - 150;
+      const rowH = (height - y - 48) / rows.length;
+
+      rows.forEach((row, i) => {
+        const rowY = y + i * rowH;
+        const isNoisy = row.type === "noisy";
+        const allocation = isNoisy ? lerp(0.62, data.noisyEnd, progress) : lerp(0.62, data.normalEnd, progress);
+        const rowColor = isNoisy ? "#d84f45" : "#14966f";
+        const dotColor = isNoisy ? "#d84f45" : "#60706b";
+        const fill = Math.min(1, allocation);
+        const overflow = Math.max(0, allocation - 1);
+
+        ctx.beginPath();
+        ctx.arc(x, rowY + rowH * 0.46, isNoisy ? 6 : 4.5, 0, Math.PI * 2);
+        ctx.fillStyle = dotColor;
+        ctx.fill();
+
+        drawRoundedRect(ctx, x + 22, rowY + rowH * 0.22, barW, rowH * 0.42, 5);
+        ctx.fillStyle = "#e9efed";
+        ctx.fill();
+
+        drawRoundedRect(ctx, x + 22, rowY + rowH * 0.22, barW * fill, rowH * 0.42, 5);
+        ctx.fillStyle = rowColor;
+        ctx.fill();
+
+        if (overflow > 0) {
+          drawRoundedRect(ctx, x + 22 + barW * 0.75, rowY + rowH * 0.22, Math.min(barW * 0.25, barW * overflow * 0.38), rowH * 0.42, 5);
+          ctx.fillStyle = "#7f1d1d";
+          ctx.fill();
+        }
+
+        if (row.label) {
+          drawText(ctx, row.label, x + 22, rowY - 4, 12, 800, isNoisy ? "#9b2d26" : "#247b61");
+        }
+      });
+
+      drawText(ctx, "allocation by client group", x + 22, y - 22, 13, 800, "#60706b");
+    }
+
+    function drawFairGate(ctx, width, time, progress) {
+      if (progress <= 0.18) return;
+
+      const x = width / 2 + 112;
+      const y = 208;
+      const alpha = clamp((progress - 0.18) / 0.22, 0, 1);
+      const pulse = 0.5 + 0.5 * Math.sin(time * 5);
+
+      ctx.globalAlpha = alpha;
+      drawRoundedRect(ctx, x - 60, y - 30, 120, 60, 8);
+      ctx.fillStyle = "#ffffff";
+      ctx.fill();
+      ctx.strokeStyle = "#14966f";
+      ctx.lineWidth = 3;
+      ctx.stroke();
+
+      for (let i = 0; i < 4; i++) {
+        ctx.beginPath();
+        ctx.moveTo(x - 40 + i * 27, y - 17);
+        ctx.lineTo(x - 40 + i * 27, y + 17);
+        ctx.strokeStyle = "#14966f";
+        ctx.lineWidth = 5;
+        ctx.lineCap = "round";
+        ctx.stroke();
+      }
+
+      ctx.globalAlpha = alpha * (0.28 + pulse * 0.2);
+      drawRoundedRect(ctx, x - 98, y + 38, 196, 26, 13);
+      ctx.fillStyle = "#d6f1e7";
+      ctx.fill();
+      ctx.globalAlpha = alpha;
+      drawText(ctx, "FAIR gate", x, y + 5, 14, 850, "#14966f", "center");
+      drawText(ctx, "throttles excess attempts", x, y + 56, 11, 800, "#247b61", "center");
+      ctx.globalAlpha = 1;
+    }
+
+    function drawThrottleImpact(ctx, width, time, progress) {
+      if (progress <= 0.26) return;
+
+      const gateX = width / 2 + 52;
+      const gateY = 208;
+      const burst = 0.5 + 0.5 * Math.sin(time * 8);
+      const alpha = clamp((progress - 0.26) / 0.18, 0, 1);
+
+      for (let i = 0; i < 9; i++) {
+        const angle = -Math.PI * 0.8 + i * Math.PI * 0.16;
+        const distance = 10 + burst * 18 + (i % 3) * 5;
+        ctx.globalAlpha = alpha * (0.28 + burst * 0.35);
+        ctx.beginPath();
+        ctx.arc(gateX + Math.cos(angle) * distance, gateY + Math.sin(angle) * distance, 2.5 + (i % 2), 0, Math.PI * 2);
+        ctx.fillStyle = i % 2 === 0 ? "#2d7dd2" : "#f0b429";
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+    }
+
+    function drawParticles(ctx, data, width, height, time, progress) {
+      const source = { x: width / 2, y: 190 };
+      const rows = laneRows(data.mode);
+      const laneY = 260;
+      const rowH = (height - laneY - 48) / rows.length;
+      const particleCount = 76;
+
+      for (let i = 0; i < particleCount; i++) {
+        const phase = (time * 0.58 + i * 0.137) % 1;
+        const noisyBias = data.mode === "without" ? lerp(0.34, 0.78, progress) : lerp(0.34, 0.18, progress);
+        const seed = Math.abs(Math.sin(i * 12.9898) * 43758.5453) % 1;
+        const noisy = seed < noisyBias;
+        const throttled = data.mode === "with" && seed > 0.72 && progress > 0.3;
+        const rowIndex = noisy ? 10 + (i % 4) : i % 10;
+        const target = {
+          x: 82,
+          y: laneY + rowIndex * rowH + rowH * 0.46
+        };
+        const p = easeOutCubic(phase);
+        let x;
+        let y;
+        if (throttled) {
+          const gate = { x: width / 2 + 52, y: 208 };
+          const bounce = Math.max(0, p - 0.62) / 0.38;
+          const impactP = Math.min(1, p / 0.62);
+          x = lerp(source.x, gate.x, easeOutCubic(impactP));
+          y = lerp(source.y, gate.y, easeOutCubic(impactP)) + Math.sin(p * Math.PI) * 16;
+          if (bounce > 0) {
+            x = lerp(gate.x, gate.x + 44, bounce);
+            y = lerp(gate.y, gate.y - 46, bounce) + Math.sin(bounce * Math.PI) * 10;
+          }
+        } else {
+          const curve = Math.sin(p * Math.PI) * 34;
+          x = lerp(source.x, target.x, p) + curve;
+          y = lerp(source.y, target.y, p);
+        }
+        ctx.globalAlpha = 0.25 + 0.65 * (1 - Math.abs(phase - 0.45));
+        ctx.beginPath();
+        ctx.arc(x, y, throttled ? 3.8 : 4.5, 0, Math.PI * 2);
+        ctx.fillStyle = throttled ? "#2d7dd2" : noisy ? "#d84f45" : "#14966f";
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+    }
+
+    function drawEventBadges(ctx, data, width, time, progress) {
+      const x = width - 226;
+      const y = 116;
+      const badges = data.mode === "without"
+        ? [
+          ["contention failures", data.resourceFailures, "#d84f45"],
+          ["throttled by FAIR", data.throttled, "#60706b"]
+        ]
+        : [
+          ["resource failures", data.resourceFailures, "#d8991f"],
+          ["throttled by FAIR", data.throttled, "#14966f"]
+        ];
+
+      badges.forEach((badge, index) => {
+        drawRoundedRect(ctx, x, y + index * 62, 176, 48, 8);
+        ctx.fillStyle = "#ffffff";
+        ctx.fill();
+        ctx.strokeStyle = "#d8e2df";
+        ctx.stroke();
+        drawText(ctx, badge[0], x + 12, y + 19 + index * 62, 11, 800, "#60706b");
+        const countProgress = badge[0].includes("throttled")
+          ? easeOutCubic(clamp((progress - 0.22) / 0.78, 0, 1))
+          : easeOutCubic(clamp(progress / 0.82, 0, 1));
+        const visible = formatCount(parseCount(badge[1]) * countProgress);
+        drawText(ctx, visible, x + 12, y + 40 + index * 62, 19, 800, badge[2]);
+      });
+
+    }
+
+    function drawPanel(ctx, data, time) {
+      const width = ctx.canvas.width;
+      const height = ctx.canvas.height;
+      const progress = scenarioProgress(time);
+      const jain = lerp(data.jainStart, data.jainEnd, progress);
+
+      ctx.clearRect(0, 0, width, height);
+      ctx.fillStyle = "#f7faf9";
+      ctx.fillRect(0, 0, width, height);
+
+      drawRoundedRect(ctx, 22, 22, width - 44, 82, 8);
+      ctx.fillStyle = "#ffffff";
+      ctx.fill();
+      ctx.strokeStyle = "#d8e2df";
+      ctx.stroke();
+
+      drawText(ctx, data.title, 42, 58, 28, 850, "#18211f");
+      drawText(ctx, data.label, 42, 84, 14, 750, data.color);
+      drawGauge(ctx, width - 88, 70, 40, jain, data.color);
+
+      drawMetric(ctx, "successes", data.successes, 42, 146, 116, "#18211f");
+      drawMetric(ctx, "utilization", `${data.utilization.toFixed(2)}%`, 176, 146, 116, "#18211f");
+      drawTokenBucket(ctx, width, time, progress);
+      drawEventBadges(ctx, data, width, time, progress);
+      if (data.mode === "with") {
+        drawFairGate(ctx, width, time, progress);
+        drawThrottleImpact(ctx, width, time, progress);
+      }
+      drawParticles(ctx, data, width, height, time, progress);
+      drawLanes(ctx, data, width, height, time, progress);
+
+      if (time > 23) {
+        const alpha = clamp((time - 23) / 2.5, 0, 1);
+        ctx.globalAlpha = alpha;
+        const bannerText = data.mode === "without"
+          ? "A few aggressive clients dominate allocation"
+          : "FAIR restores broad access while keeping capacity hot";
+        drawRoundedRect(ctx, 44, height - 58, width - 88, 34, 8);
+        ctx.fillStyle = data.softColor;
+        ctx.fill();
+        drawText(ctx, bannerText, width / 2, height - 35, 15, 850, data.color, "center");
+        ctx.globalAlpha = 1;
+      }
+    }
+
+    function renderAt(time) {
+      canvases.forEach((data) => {
+        const canvas = data.element;
+        const rect = canvas.getBoundingClientRect();
+        const pixelRatio = window.devicePixelRatio || 1;
+        const width = Math.max(320, Math.floor(rect.width * pixelRatio));
+        const height = Math.max(320, Math.floor(rect.height * pixelRatio));
+        const logicalWidth = 900;
+        const logicalHeight = 620;
+        if (canvas.width !== width || canvas.height !== height) {
+          canvas.width = width;
+          canvas.height = height;
+        }
+        const ctx = canvas.getContext("2d");
+        ctx.setTransform(pixelRatio * rect.width / logicalWidth, 0, 0, pixelRatio * rect.height / logicalHeight, 0, 0);
+        const proxy = {
+          canvas: { width: logicalWidth, height: logicalHeight },
+          clearRect: (...args) => ctx.clearRect(...args),
+          fillRect: (...args) => ctx.fillRect(...args),
+          beginPath: (...args) => ctx.beginPath(...args),
+          moveTo: (...args) => ctx.moveTo(...args),
+          arcTo: (...args) => ctx.arcTo(...args),
+          closePath: (...args) => ctx.closePath(...args),
+          fill: (...args) => ctx.fill(...args),
+          stroke: (...args) => ctx.stroke(...args),
+          arc: (...args) => ctx.arc(...args),
+          lineTo: (...args) => ctx.lineTo(...args),
+          fillText: (...args) => ctx.fillText(...args),
+          set fillStyle(value) { ctx.fillStyle = value; },
+          set strokeStyle(value) { ctx.strokeStyle = value; },
+          set lineWidth(value) { ctx.lineWidth = value; },
+          set lineCap(value) { ctx.lineCap = value; },
+          set font(value) { ctx.font = value; },
+          set textAlign(value) { ctx.textAlign = value; },
+          set textBaseline(value) { ctx.textBaseline = value; },
+          set globalAlpha(value) { ctx.globalAlpha = value; },
+          get globalAlpha() { return ctx.globalAlpha; }
+        };
+        drawPanel(proxy, data, time);
+      });
+
+      timeline.value = String(time);
+      clock.textContent = `${time.toFixed(1).padStart(4, "0")}s`;
+    }
+
+    window.renderFairDemoFrame = (time) => {
+      manualTime = clamp(Number(time), 0, duration);
+      paused = true;
+      renderAt(manualTime);
+      return manualTime;
+    };
+
+    function frame(now) {
+      let time;
+      if (fixedTime !== null) {
+        time = manualTime;
+      } else if (paused) {
+        time = manualTime;
+      } else {
+        time = ((now - start) / 1000) % duration;
+        manualTime = time;
+      }
+      renderAt(time);
+      requestAnimationFrame(frame);
+    }
+
+    playButton.addEventListener("click", () => {
+      paused = !paused;
+      playButton.textContent = paused ? ">" : "||";
+      playButton.setAttribute("aria-label", paused ? "Play animation" : "Pause animation");
+      if (!paused) {
+        start = performance.now() - manualTime * 1000;
+      }
+    });
+
+    timeline.addEventListener("input", () => {
+      paused = true;
+      manualTime = Number(timeline.value);
+      playButton.textContent = ">";
+      playButton.setAttribute("aria-label", "Play animation");
+      renderAt(manualTime);
+    });
+
+    window.addEventListener("resize", () => renderAt(manualTime));
+
+    if (recording && fixedTime === null) {
+      start = performance.now();
+    }
+
+    requestAnimationFrame(frame);
+  </script>
+</body>
+</html>
