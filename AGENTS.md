@@ -20,6 +20,7 @@ The codebase is organized as follows:
     - **`request/`**: Request and response models.
     - **`logger/`**: Logging interface and default implementations.
     - **`integration/`**: Integration tests.
+- **`conformance/`**: Black-box tracker protocol and rotation grader. Run `python3 conformance/test_reference.py` to check the Go reference and detect a broken standby update.
 - **`designs/`**: Design documents and templates.
 - **`mutations/`**: Mutation testing resources, including diffs and drivers.
 - **`tasks.go`**: A Go script for running maintenance tasks (like linting).
