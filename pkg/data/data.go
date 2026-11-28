@@ -192,6 +192,33 @@ func (s *Structure) ReportOutcome(_ context.Context, clientIdentifier []byte, ou
 	return &request.ReportOutcomeResult{}
 }
 
+// PenaltyOccupancy reports how much of the structure is carrying penalties.
+// For each level it counts the buckets whose probability, after decay, is at
+// least threshold, and it returns the mean probability across all buckets.
+// It reads every bucket without changing any, so its cost grows with L×M:
+// call it from a metrics scrape, not per request.
+func (s *Structure) PenaltyOccupancy(threshold float64) (penalizedByLevel []int, meanProbability float64) {
+	now := s.clock.Now().Sub(s.epoch).Milliseconds()
+	penalizedByLevel = make([]int, len(s.levels))
+	var total float64
+	for l, level := range s.levels {
+		for _, buck := range level {
+			buck.mu.Lock()
+			p := buck.probability
+			if now > buck.lastUpdatedTimeMillis {
+				p = adjustProbability(p, s.config.Lambda, uint64(now-buck.lastUpdatedTimeMillis))
+			}
+			buck.mu.Unlock()
+
+			total += p
+			if p >= threshold {
+				penalizedByLevel[l]++
+			}
+		}
+	}
+	return penalizedByLevel, total / (float64(s.config.L) * float64(s.config.M))
+}
+
 // Visit the buckets belonging to the given clientIdentifier
 // Also takes the bucket lock and manages probability decay prior to calling the handler
 func (s *Structure) visitBuckets(clientIdentifier []byte, fn func(uint32, uint32, *bucket)) {

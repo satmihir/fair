@@ -4,6 +4,7 @@ import (
 	"context"
 	"hash/maphash"
 	"sync"
+	"sync/atomic"
 
 	"github.com/satmihir/fair/pkg/config"
 	"github.com/satmihir/fair/pkg/data"
@@ -41,6 +42,13 @@ type FairnessTracker struct {
 
 	// Logs the first unknown outcome only, so a caller bug cannot flood the log.
 	unknownOutcome sync.Once
+
+	// Cumulative totals reported by Counters.
+	registered      atomic.Uint64
+	throttled       atomic.Uint64
+	successes       atomic.Uint64
+	failures        atomic.Uint64
+	ignoredOutcomes atomic.Uint64
 }
 
 // RotationStatus describes background rotation attempts for one tracker.
@@ -206,7 +214,13 @@ func (ft *FairnessTracker) RegisterRequest(ctx context.Context, clientIdentifier
 	// catches up on the next time it is visited. Both structures take time
 	// from the tracker's high-water clock, so the standby catches up to the
 	// latest time this read observed even if the underlying clock rewinds.
-	return ft.mainStructure.RegisterRequest(ctx, clientIdentifier)
+	resp := ft.mainStructure.RegisterRequest(ctx, clientIdentifier)
+
+	ft.registered.Add(1)
+	if resp != nil && resp.ShouldThrottle {
+		ft.throttled.Add(1)
+	}
+	return resp
 }
 
 func (ft *FairnessTracker) outcomeLock(clientIdentifier []byte) *sync.Mutex {
@@ -219,10 +233,17 @@ func (ft *FairnessTracker) outcomeLock(clientIdentifier []byte) *sync.Mutex {
 // An outcome other than OutcomeSuccess or OutcomeFailure is ignored.
 func (ft *FairnessTracker) ReportOutcome(ctx context.Context, clientIdentifier []byte, outcome request.Outcome) *request.ReportOutcomeResult {
 	if outcome != request.OutcomeSuccess && outcome != request.OutcomeFailure {
+		ft.ignoredOutcomes.Add(1)
 		ft.unknownOutcome.Do(func() {
 			logger.Printf("ignoring unknown outcome %d; further occurrences are not logged", outcome)
 		})
 		return &request.ReportOutcomeResult{}
+	}
+
+	if outcome == request.OutcomeSuccess {
+		ft.successes.Add(1)
+	} else {
+		ft.failures.Add(1)
 	}
 
 	// Wait for this client's turn before pinning a generation pair.

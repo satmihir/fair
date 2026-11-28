@@ -115,6 +115,21 @@ This is deliberate. It limits how long a client can be penalized for sharing buc
 
 For a reproducible simulation, set `HashKeySource` on the config to a seeded reader; leave it nil in production. It controls placement only: each throttling decision still draws from `math/rand`'s package-level generator.
 
+## Monitoring
+
+The tracker exposes three signals. None needs a logger, and all are safe to call from any goroutine.
+
+- `trk.Counters()` returns cumulative totals: requests registered, requests throttled, successes and failures reported, and outcomes ignored because their value was unknown. It is cheap; take the difference between two readings for a rate. A nonzero `IgnoredOutcomes` is a bug in the caller.
+- `trk.Saturation()` reports how much of the active structure is carrying penalties: the number of penalized buckets at each level and the mean throttling probability. `SharedPenaltyChance()` on the result estimates how likely a client with no failures of its own is to be throttled because all of its buckets are penalized by others; the tuner aims to keep that at or below 0.0001. Watch for it rising. It means there are more misbehaving clients than the structure was sized for, or one caller is spreading failures across many identifiers, and more buckets per level are needed. The call reads every bucket, so make it from a metrics scrape rather than per request.
+- `trk.RotationStatus()` reports rotation attempts, described under [Logging](#logging).
+
+```go
+c := trk.Counters()
+s := trk.Saturation()
+log.Printf("registered=%d throttled=%d penalized=%.4f shared=%.2g",
+    c.Registered, c.Throttled, s.PenalizedFraction(), s.SharedPenaltyChance())
+```
+
 ## Logging
 Logging is disabled by default. If rebuilding a generation fails, the tracker keeps serving with its current pair and retries on the next tick. Poll `trk.RotationStatus()` for monitoring: `Failures` is cumulative and `LastError` clears after the next successful rotation. Neither requires enabling a logger. The retry applies to errors returned by construction, not process-level out-of-memory failures.
 package `logger` exposes an interface with `GetLogger` and `SetLogger` methods.
