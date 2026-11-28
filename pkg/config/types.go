@@ -29,8 +29,8 @@ type FairnessTrackerConfig struct {
 }
 
 // ValidateStructure checks the parameters needed by the underlying data structure.
-// It does not impose a memory budget or validate RotationFrequency, which only
-// matters for callers that start a ticker.
+// Dimensions must fit the rotating tracker's allocation budget. RotationFrequency
+// is checked separately by callers that start a real ticker.
 func (c *FairnessTrackerConfig) ValidateStructure() error {
 	switch {
 	case c == nil:
@@ -44,5 +44,5 @@ func (c *FairnessTrackerConfig) ValidateStructure() error {
 	case c.FinalProbabilityFunction == nil:
 		return fmt.Errorf("FinalProbabilityFunction cannot be nil")
 	}
-	return nil
+	return checkRotationBudget(c.L, c.M)
 }
