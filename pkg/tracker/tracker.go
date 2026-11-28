@@ -126,6 +126,13 @@ func newFairnessTracker(cfg config.FairnessTrackerConfig, source utils.IClock, t
 	// Start a periodic task to rotate underlying structures to keep
 	// changing the hash seeds so we don't continue punishing the same
 	// innocent workloads repeatedly in the worst case of a false positive.
+	//
+	// Each new standby starts empty and learns only from outcomes reported
+	// after this point. A client that stays fully throttled reports none, so
+	// it starts again from zero once that standby is promoted. This is
+	// intended: it is how a blocked client recovers when decay is disabled,
+	// and copying penalties into the standby would make a false positive
+	// outlive the rotation meant to clear it.
 	go func() {
 		defer close(ft.rotationDone)
 		ticks := ticker.C()

@@ -58,7 +58,8 @@ func (bl *FairnessTrackerBuilder) SetPi(Pi float64) {
 	bl.configuration.Pi = Pi
 }
 
-// SetLambda sets the decay rate for bucket probabilities.
+// SetLambda sets the decay rate for bucket probabilities. Zero disables decay;
+// rotation still ends a penalty (see SetRotationFrequency).
 func (bl *FairnessTrackerBuilder) SetLambda(Lambda float64) {
 	bl.configuration.Lambda = Lambda
 }
@@ -69,6 +70,8 @@ func (bl *FairnessTrackerBuilder) SetIncludeStats(IncludeStats bool) {
 }
 
 // SetRotationFrequency configures how often the internal structures are rotated.
+// A client that stays fully throttled is forgotten between one and two
+// intervals after its last reported failure, whatever the decay rate is.
 func (bl *FairnessTrackerBuilder) SetRotationFrequency(rotationFrequency time.Duration) {
 	bl.configuration.RotationFrequency = rotationFrequency
 }

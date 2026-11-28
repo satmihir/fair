@@ -19,9 +19,14 @@ type FairnessTrackerConfig struct {
 	Pi float64
 	// The delta P to subtract from a bucket's probability when there's a success
 	Pd float64
-	// The exponential decay rate for the probabilities
+	// The exponential decay rate for the probabilities, per second. Zero
+	// disables decay but not forgiveness: rotation still ends a penalty (see
+	// RotationFrequency).
 	Lambda float64
-	// The frequency of rotation
+	// The interval between rotations. It also bounds penalty memory: a client
+	// that stays fully throttled reports no outcomes, so it is forgotten
+	// between one and two intervals after its last reported failure, whatever
+	// Lambda is. See "How long a penalty lasts" in the README.
 	RotationFrequency time.Duration
 	// Include result stats. Useful for debugging but may slightly affect performance.
 	IncludeStats bool
