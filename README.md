@@ -152,7 +152,7 @@ Run tests and static analysis locally with:
 make test
 ```
 
-Generate protobuff wrappers with:
+`make test` and `make build` use the checked-in generated protobuf code and do not regenerate it. Regenerate only after changing the schema, with protoc 3.20.3 and protoc-gen-go v1.36.10, because CI compares the result byte for byte:
 ```bash
 make proto
 ```

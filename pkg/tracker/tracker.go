@@ -169,11 +169,17 @@ func newFairnessTracker(cfg config.FairnessTrackerConfig, source utils.IClock, t
 				ft.structureIDCounter++
 
 				ft.rotationLock.Lock()
+				retired := ft.mainStructure
 				ft.mainStructure = ft.secondaryStructure
 				ft.secondaryStructure = s
 				ft.rotationStatus.Rotations++
 				ft.rotationStatus.LastError = nil
 				ft.rotationLock.Unlock()
+
+				// Every use of a structure happens under the read lock, and
+				// the write lock above waited for those to finish, so nothing
+				// can still be using the one just retired.
+				retired.Close()
 			}
 		}
 	}()
@@ -265,7 +271,9 @@ func (ft *FairnessTracker) ReportOutcome(ctx context.Context, clientIdentifier [
 // Close stops background rotation and releases the ticker. It is safe to call
 // repeatedly or concurrently. Every caller waits for the rotation worker to
 // exit; an in-flight rotation may finish before Close returns. RegisterRequest
-// and ReportOutcome remain usable with the final active and standby structures.
+// and ReportOutcome remain usable with the final active and standby structures,
+// so Close leaves that pair open: only structures retired by rotation are
+// closed.
 // Do not call Close from inside a tracker callback: rotation may be waiting
 // for that callback to return.
 func (ft *FairnessTracker) Close() {

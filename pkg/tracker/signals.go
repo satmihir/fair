@@ -90,13 +90,14 @@ type occupancyReporter interface {
 
 // Saturation scans the active structure and reports how full it is. The scan
 // reads every bucket, so its cost grows with L×M: call it from a metrics
-// scrape, not per request. It does not hold up requests or rotation, and a
-// rotation during the scan means the report describes the structure that was
-// active when the scan began.
+// scrape, not per request. Requests run alongside it. A rotation that comes
+// due during the scan waits for it to finish, because rotation closes the
+// structure it retires, and requests that arrive while that rotation is
+// waiting wait with it.
 func (ft *FairnessTracker) Saturation() Saturation {
 	ft.rotationLock.RLock()
+	defer ft.rotationLock.RUnlock()
 	active := ft.mainStructure
-	ft.rotationLock.RUnlock()
 
 	report := Saturation{
 		Levels:          int(ft.trackerConfig.L),

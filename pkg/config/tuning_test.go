@@ -5,19 +5,9 @@ import (
 	"math"
 	"testing"
 
-	"github.com/satmihir/fair/v2/pkg/logger"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
-
-type panicLogger struct{}
-
-func (p *panicLogger) Printf(_ string, _ ...any) {}
-func (p *panicLogger) Print(_ ...any)            {}
-func (p *panicLogger) Println(_ ...any)          {}
-func (p *panicLogger) Fatalf(format string, args ...any) {
-	panic(fmt.Sprintf(format, args...))
-}
 
 func TestCalculateL(t *testing.T) {
 	// Manually calculated by hand
@@ -58,16 +48,9 @@ func TestMinFinalProbabilityFunction(t *testing.T) {
 		require.Equal(t, 0.2, smallest)
 	})
 
-	t.Run("empty slice triggers fatal logger", func(t *testing.T) {
-		prevLogger := logger.GetLogger()
-		logger.SetLogger(&panicLogger{})
-		t.Cleanup(func() {
-			logger.SetLogger(prevLogger)
-		})
-
-		require.Panics(t, func() {
-			MinFinalProbabilityFunction([]float64{})
-		})
+	t.Run("empty slice gives zero", func(t *testing.T) {
+		require.Zero(t, MinFinalProbabilityFunction([]float64{}))
+		require.Zero(t, MinFinalProbabilityFunction(nil))
 	})
 }
 
@@ -77,34 +60,20 @@ func TestMeanFinalProbabilityFunction(t *testing.T) {
 		require.Equal(t, 0.5, mean)
 	})
 
-	t.Run("empty slice triggers fatal logger", func(t *testing.T) {
-		prevLogger := logger.GetLogger()
-		logger.SetLogger(&panicLogger{})
-		t.Cleanup(func() {
-			logger.SetLogger(prevLogger)
-		})
-
-		require.Panics(t, func() {
-			MeanFinalProbabilityFunction([]float64{})
-		})
+	t.Run("empty slice gives zero, not NaN", func(t *testing.T) {
+		require.Zero(t, MeanFinalProbabilityFunction([]float64{}))
+		require.Zero(t, MeanFinalProbabilityFunction(nil))
 	})
 }
 
 func TestDefaultFairnessTrackerConfig_GenerateError(t *testing.T) {
 	prevGenerator := generateTunedStructureConfig
-	prevLogger := logger.GetLogger()
-
 	generateTunedStructureConfig = func(_, _, _ uint32) (*FairnessTrackerConfig, error) {
 		return nil, fmt.Errorf("forced generation failure")
 	}
-	logger.SetLogger(&panicLogger{})
+	t.Cleanup(func() { generateTunedStructureConfig = prevGenerator })
 
-	t.Cleanup(func() {
-		generateTunedStructureConfig = prevGenerator
-		logger.SetLogger(prevLogger)
-	})
-
-	require.Panics(t, func() {
+	require.PanicsWithValue(t, "fair: default configuration is invalid: forced generation failure", func() {
 		_ = DefaultFairnessTrackerConfig()
 	})
 }

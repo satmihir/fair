@@ -20,12 +20,15 @@ The codebase is organized as follows:
     - **`logger/`**: Logging interface and default implementations.
     - **`integration/`**: Integration tests.
 - **`conformance/`**: Black-box tracker protocol and rotation grader. Run `python3 conformance/test_reference.py` to check the Go reference and detect a broken standby update.
+- **`cmd/`**: Commands, not importable packages.
+    - **`fairness_eval/`**: The deterministic fairness evaluator and its regression gate.
+    - **`tasks/`**: Maintenance tasks such as linting (`go run ./cmd/tasks check`).
 - **`internal/`**: Code that is not part of the public API.
+    - **`testutils/`**: Helpers shared by this module's tests.
     - **`serialization/`**: Protobuf definitions and generated code. Not wired to the tracker yet.
     - **`simticker/`**: A ticker that drives rotations under a simulation clock.
 - **`designs/`**: Design documents and templates.
 - **`mutations/`**: Mutation testing resources, including diffs and drivers.
-- **`tasks.go`**: A Go script for running maintenance tasks (like linting).
 - **`Makefile`**: Standard build and test commands.
 
 ## Development Workflow
@@ -37,7 +40,7 @@ You must use the following commands to build, test, and verify your work.
 - **Generate Protobufs**: `make proto`
     - Run this with protoc 3.20.3 and protoc-gen-go v1.36.10 if you modify `internal/serialization/v1.proto`. On Linux x86_64, `bash .github/scripts/verify-proto.sh` reproduces CI's pinned, byte-for-byte check without modifying the source tree.
 - **Build**: `make build`
-    - Compiles the project.
+    - Compiles the project. Neither this nor `make test` regenerates protobuf code.
 - **Test**: `make test`
     - Runs unit tests (`go test -v ./...`) and linting (`golangci-lint run`).
     - **Always run this before submitting changes.**
