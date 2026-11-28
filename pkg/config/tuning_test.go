@@ -54,8 +54,8 @@ func TestGenerateTunedStructureConfigWithZeroTolerance(t *testing.T) {
 
 func TestMinFinalProbabilityFunction(t *testing.T) {
 	t.Run("returns minimum for non-empty slice", func(t *testing.T) {
-		min := MinFinalProbabilityFunction([]float64{0.9, 0.4, 0.7, 0.2})
-		require.Equal(t, 0.2, min)
+		smallest := MinFinalProbabilityFunction([]float64{0.9, 0.4, 0.7, 0.2})
+		require.Equal(t, 0.2, smallest)
 	})
 
 	t.Run("empty slice triggers fatal logger", func(t *testing.T) {

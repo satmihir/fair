@@ -1,3 +1,8 @@
+// rand.Seed has had no effect since Go 1.24. Restore it for this test binary so
+// TestFreshKeysIgnoreGlobalMathRandSeed can pin the generator the keys must
+// not use.
+//
+//go:debug randseednop=0
 package data
 
 import (
@@ -190,12 +195,20 @@ func TestFreshKeysComeFromCryptoRand(t *testing.T) {
 	}
 }
 
-// Keys must not follow math/rand's package-level generator, which rand.Seed
-// or GODEBUG=randautoseed=0 can make repeat across process starts.
+// Keys must not follow math/rand's package-level generator, which
+// GODEBUG=randautoseed=0 can make repeat across process starts. Seeding it
+// here reproduces that: a key drawn from it would come out the same twice.
 func TestFreshKeysIgnoreGlobalMathRandSeed(t *testing.T) {
+	//nolint:staticcheck // Deliberately pin the generator the keys must not use.
+	rand.Seed(1)
+	pinned := rand.Uint64()
+	//nolint:staticcheck
+	rand.Seed(1)
+	require.Equal(t, pinned, rand.Uint64(), "rand.Seed must take effect for this test to mean anything")
+
 	cfg := hashTestConfig(4, 4096)
 	draw := func() [2]uint64 {
-		//nolint:staticcheck // Deliberately pin the generator the keys must not use.
+		//nolint:staticcheck
 		rand.Seed(1)
 		s, err := NewStructure(withStats(&cfg), 1)
 		require.NoError(t, err)

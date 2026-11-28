@@ -43,8 +43,8 @@ Headline results with the default FAIR configuration:
 
 | Scenario | No FAIR Jain | FAIR Jain | Improvement | Utilization with FAIR |
 | --- | ---: | ---: | ---: | ---: |
-| API noisy neighbors | 0.2184 | 0.6621 | +203.2% | 99.97% |
-| Batch surge | 0.7497 | 0.9970 | +33.0% | 89.34% |
+| API noisy neighbors | 0.2184 | 0.6687 | +206.2% | 99.96% |
+| Batch surge | 0.7497 | 0.9969 | +33.0% | 89.36% |
 
 [![FAIR noisy-neighbor visual demo](demo/fairness_visual/fair-demo-thumbnail.png)](demo/fairness_visual/fair-demo.mp4)
 
@@ -111,7 +111,7 @@ This is deliberate. It limits how long a client can be penalized for sharing buc
 
 **Client identifiers:** Identifiers are placed with SipHash-2-4 under a secret 128-bit key that is redrawn from `crypto/rand` for every generation, so a client that chooses its own identifier cannot aim it at another client's buckets. Every level's bucket is derived from that one 64-bit hash. Two clients with different hashes share a bucket at every level about as often as chance allows (roughly `1/M^L`); two identifiers with the same hash share every level, which bounds the rate at about `2^-64` per pair however many levels are configured. If key generation fails, construction returns an error, and a failed rotation is retried as described under [Logging](#logging).
 
-For a reproducible simulation, set `HashKeySource` on the config to a seeded reader; leave it nil in production. It controls placement only: each throttling decision still draws from `math/rand`'s package-level generator.
+For a reproducible simulation, set two fields on the config and leave both nil in production. `HashKeySource` is a reader that supplies the placement keys. `DecisionSource` is a function that supplies the random number behind each throttling decision; by default that comes from `math/rand`. Seeding `math/rand` with `rand.Seed` does not make decisions reproducible: it has had no effect since Go 1.24.
 
 ## Monitoring
 
@@ -153,7 +153,9 @@ Generate protobuff wrappers with:
 make proto
 ```
 
-Ensure [golangci-lint](https://github.com/golangci/golangci-lint) is installed to execute the linter.
+The module needs Go 1.26 or newer. CI builds and tests on the latest Go release and on the oldest one that still receives security fixes, which is the version `go.mod` declares.
+
+Linting needs [golangci-lint](https://github.com/golangci/golangci-lint) v2, built with a Go version at least as new as the one in `go.mod`. CI pins v2.15.0; `.golangci.yml` uses the v2 format, which v1 releases cannot read.
 
 ## Resources
 

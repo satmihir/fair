@@ -49,7 +49,9 @@ You must use the following commands to build, test, and verify your work.
 Linting is strictly enforced in the CI pipeline. You must ensure all checks pass locally.
 
 - **Command**: `golangci-lint run ./...` (or via `make test`)
-- **Configuration**: Rules are defined in `.golangci.yml`.
+- **Version**: golangci-lint v2 (CI pins v2.15.0), built with a Go version at least as new as the one in `go.mod`. A v1 release cannot read the config.
+- **Configuration**: Rules are defined in `.golangci.yml` (v2 format).
+- **Go version**: `go.mod` declares the oldest supported Go release (1.26). CI also runs on the latest release.
 
 **Key Enforced Rules**:
 - **`revive`**: Enforces Go best practices (variable naming, error handling, etc.).

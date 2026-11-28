@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/satmihir/fair/pkg/config"
+	"github.com/satmihir/fair/pkg/request"
 	"github.com/satmihir/fair/pkg/testutils"
 )
 
@@ -84,4 +85,21 @@ func TestBuilderSetHashKeySource(t *testing.T) {
 		return tr.RegisterRequest(context.Background(), []byte("client")).ResultStats.BucketIndexes
 	}
 	require.Equal(t, placement(), placement(), "a seeded key source must fix placement")
+}
+
+func TestBuilderSetDecisionSource(t *testing.T) {
+	draw := 1.
+	b := NewFairnessTrackerBuilder()
+	b.SetPi(.5)
+	b.SetPd(.25)
+	b.SetDecisionSource(func() float64 { return draw })
+	tr, err := b.Build()
+	require.NoError(t, err)
+	defer tr.Close()
+
+	ctx, id := context.Background(), []byte("client")
+	tr.ReportOutcome(ctx, id, request.OutcomeFailure) // Probability 0.5.
+	require.False(t, tr.RegisterRequest(ctx, id).ShouldThrottle)
+	draw = 0
+	require.True(t, tr.RegisterRequest(ctx, id).ShouldThrottle)
 }

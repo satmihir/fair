@@ -78,6 +78,13 @@ func (bl *FairnessTrackerBuilder) SetHashKeySource(source io.Reader) {
 	bl.configuration.HashKeySource = source
 }
 
+// SetDecisionSource sets the function that supplies the uniform random number
+// in [0, 1) behind each throttling decision. Leave it unset in production; a
+// simulation can pass a seeded source to make decisions reproducible.
+func (bl *FairnessTrackerBuilder) SetDecisionSource(source func() float64) {
+	bl.configuration.DecisionSource = source
+}
+
 // FairnessTrackerError is returned when the tracker encounters a recoverable
 // error that should be surfaced to the caller.
 type FairnessTrackerError struct {

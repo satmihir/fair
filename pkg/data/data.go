@@ -51,6 +51,8 @@ type Structure struct {
 	epoch time.Time
 	// Logs the first unusable final probability only.
 	badProbability sync.Once
+	// The uniform draw in [0, 1) behind each throttling decision.
+	decision func() float64
 	// Includes stats in results. Useful for debugging but may slightly affect performance.
 	includeStats bool
 }
@@ -68,6 +70,11 @@ func NewStructureWithClock(input *config.FairnessTrackerConfig, id uint64, clock
 	}
 	if utils.IsNil(clock) {
 		return nil, NewDataError(nil, "clock cannot be nil")
+	}
+
+	decision := cfg.DecisionSource
+	if decision == nil {
+		decision = rand.Float64
 	}
 
 	hashKey, err := newHashKey(cfg.HashKeySource)
@@ -92,6 +99,7 @@ func NewStructureWithClock(input *config.FairnessTrackerConfig, id uint64, clock
 		clock:        clock,
 		epoch:        clock.Now(),
 		includeStats: cfg.IncludeStats,
+		decision:     decision,
 	}, nil
 }
 
@@ -141,7 +149,7 @@ func (s *Structure) RegisterRequest(_ context.Context, clientIdentifier []byte) 
 	}
 
 	// Decide whether to throttle the request based on the probability.
-	shouldThrottle := rand.Float64() <= pFinal
+	shouldThrottle := s.decision() <= pFinal
 
 	return &request.RegisterRequestResult{
 		ShouldThrottle: shouldThrottle,
@@ -249,7 +257,7 @@ func (s *Structure) visitBuckets(clientIdentifier []byte, fn func(uint32, uint32
 // newHashKey reads a 128-bit key from source, or from crypto/rand when source
 // is nil. Placement keys must stay secret, so they do not come from math/rand:
 // that generator is shared with the rest of the process and can be made to
-// repeat, by rand.Seed or by GODEBUG=randautoseed=0.
+// repeat, for example with GODEBUG=randautoseed=0.
 func newHashKey(source io.Reader) ([2]uint64, error) {
 	if utils.IsNil(source) {
 		source = crand.Reader

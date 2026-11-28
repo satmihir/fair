@@ -134,18 +134,18 @@ func TestSerializerErrorPaths(t *testing.T) {
 // createSampleFairStruct creates a sample FairStruct for testing
 func createSampleFairStruct() *FairStruct {
 	// Generate random values
-	randomInt64 := func(max int64) int64 {
-		n, _ := rand.Int(rand.Reader, big.NewInt(max))
+	randomInt64 := func(limit int64) int64 {
+		n, _ := rand.Int(rand.Reader, big.NewInt(limit))
 		return n.Int64()
 	}
 
-	randomUint32 := func(max uint32) uint32 {
-		n, _ := rand.Int(rand.Reader, big.NewInt(int64(max)))
+	randomUint32 := func(limit uint32) uint32 {
+		n, _ := rand.Int(rand.Reader, big.NewInt(int64(limit)))
 		return uint32(n.Int64())
 	}
 
-	randomUint64 := func(max uint64) uint64 {
-		n, _ := rand.Int(rand.Reader, big.NewInt(int64(max)))
+	randomUint64 := func(limit uint64) uint64 {
+		n, _ := rand.Int(rand.Reader, big.NewInt(int64(limit)))
 		return uint64(n.Int64())
 	}
 	randomFloat := func() float64 {

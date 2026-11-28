@@ -40,6 +40,14 @@ type FairnessTrackerConfig struct {
 	// throttling decision. A reader shared by several trackers must be safe
 	// for concurrent use.
 	HashKeySource io.Reader
+	// DecisionSource returns the uniform random number in [0, 1) that each
+	// throttling decision compares with the client's probability. Leave it
+	// nil in production to use math/rand's generator. A simulation or test
+	// can supply a seeded source to make decisions reproducible; calling
+	// rand.Seed no longer does that, because it has had no effect since
+	// Go 1.24. The function must be safe for concurrent use if requests are
+	// made concurrently.
+	DecisionSource func() float64
 }
 
 // ValidateStructure checks the parameters needed by the underlying data structure.
@@ -50,11 +58,11 @@ func (c *FairnessTrackerConfig) ValidateStructure() error {
 	case c == nil:
 		return fmt.Errorf("FairnessTrackerConfig cannot be nil")
 	case c.M == 0 || c.L == 0:
-		return fmt.Errorf("M and L must be positive, got M=%d L=%d", c.M, c.L)
+		return fmt.Errorf("dimensions M and L must be positive, got M=%d L=%d", c.M, c.L)
 	case !(0 < c.Pd && c.Pd < c.Pi && c.Pi <= 1):
 		return fmt.Errorf("probability increments must satisfy 0 < Pd < Pi <= 1, got Pd=%g Pi=%g", c.Pd, c.Pi)
 	case math.IsNaN(c.Lambda) || math.IsInf(c.Lambda, 0) || c.Lambda < 0:
-		return fmt.Errorf("Lambda must be finite and nonnegative, got %g", c.Lambda)
+		return fmt.Errorf("decay rate Lambda must be finite and nonnegative, got %g", c.Lambda)
 	case c.FinalProbabilityFunction == nil:
 		return fmt.Errorf("FinalProbabilityFunction cannot be nil")
 	}

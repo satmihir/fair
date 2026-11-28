@@ -121,3 +121,42 @@ func TestNaNFallbackSurvivesCallbackMutation(t *testing.T) {
 	require.Equal(t, 1., res.ResultStats.FinalProbability)
 	require.True(t, res.ShouldThrottle, "a saturated flow must still be throttled")
 }
+
+func TestDecisionSourceDrivesThrottling(t *testing.T) {
+	cfg := validStructureConfig()
+	cfg.Pi, cfg.Pd = .5, .25
+	var draw float64
+	cfg.DecisionSource = func() float64 { return draw }
+	s, err := NewStructure(&cfg, 1)
+	require.NoError(t, err)
+	ctx, id := context.Background(), []byte("client")
+	s.ReportOutcome(ctx, id, request.OutcomeFailure) // Probability 0.5.
+
+	for _, tc := range []struct {
+		draw     float64
+		throttle bool
+	}{{0, true}, {.49, true}, {.5, true}, {.51, false}, {.99, false}} {
+		draw = tc.draw
+		require.Equalf(t, tc.throttle, s.RegisterRequest(ctx, id).ShouldThrottle, "draw %g", tc.draw)
+	}
+}
+
+func TestDefaultDecisionSourceThrottlesInProportion(t *testing.T) {
+	cfg := validStructureConfig()
+	cfg.Pi, cfg.Pd = .5, .25
+	require.Nil(t, cfg.DecisionSource)
+	s, err := NewStructure(&cfg, 1)
+	require.NoError(t, err)
+	ctx, id := context.Background(), []byte("client")
+	s.ReportOutcome(ctx, id, request.OutcomeFailure) // Probability 0.5.
+
+	const requests = 20000
+	throttled := 0
+	for i := 0; i < requests; i++ {
+		if s.RegisterRequest(ctx, id).ShouldThrottle {
+			throttled++
+		}
+	}
+	// Six standard deviations of a fair coin over 20,000 flips is about 424.
+	require.InDelta(t, requests/2, throttled, 430)
+}
