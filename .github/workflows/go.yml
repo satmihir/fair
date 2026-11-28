@@ -2,6 +2,8 @@ name: Go
 
 on:
   pull_request: {} # Includes PRs targeting an intermediate branch in a stack.
+  schedule:
+    - cron: '17 6 * * 1' # Weekly, so a newly published vulnerability is caught without a push.
   push:
     branches: [main, 'p1/**', 'hardening/**', 'stack/**']
     tags: ['**']
@@ -34,6 +36,11 @@ jobs:
           version: v2.15.0
           args: --timeout=5m
           skip-cache: true
+      - name: Vulnerability scan
+        # Fails on a known vulnerability the code can reach, in a dependency
+        # or in this job's Go release. A failure that names the standard
+        # library is fixed by moving the Go versions in this file forward.
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.10.0 ./...
       - name: Verify checked-in protobuf code
         run: bash .github/scripts/verify-proto.sh
 
