@@ -63,8 +63,8 @@
 Manual configurations need positive `M` and `L`, finite increments satisfying
 `0 < Pd < Pi <= 1`, finite `Lambda >= 0`, and a nonnil final probability
 function. A nil receiver returns an error. Rotation frequency is a ticker
-policy, not a structural requirement. Structural validity is not an allocation
-budget: representable dimensions may still exceed available memory.
+policy, not a structural requirement. Dimensions are checked against the three-generation
+rotation storage budget, not against machine-wide available memory.
 
 ## Target: GenerateTunedStructureConfig
 - **Type:** func(expectedClientFlows, bucketsPerLevel, tolerableBadRequestsPerBadFlow uint32) (*FairnessTrackerConfig, error)
@@ -98,7 +98,7 @@ budget: representable dimensions may still exceed available memory.
    - Assert: `Pi(100) == 0.01`, `Pd(100) == 0.00001`; and `Pi(100) < Pi(25)`, `Pd(100) < Pd(25)`.
 
 ### Negative/Error Cases
-- Any zero input, a single bucket (certain collision), or a required level count beyond uint32 returns a nil configuration and an error. For example, `(32000, 2, 1)` requires more than `math.MaxUint32` levels. In contrast, `(1, math.MaxUint32, 1)` succeeds with `Pi == 1`: the tuner checks representability, not an allocation budget.
+- Any zero input, a single bucket (certain collision), or a required level count beyond uint32 returns a nil configuration and an error. For example, `(32000, 2, 1)` requires more than `math.MaxUint32` levels. `(1, math.MaxUint32, 1)` fits the level-count representation but is rejected by the rotation storage budget.
 
 ### Properties
 - Monotonicity (compare successful configurations only, subject to the `minL` clamp):
