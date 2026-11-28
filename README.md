@@ -1,5 +1,5 @@
 # FAIR
-![Coverage](https://img.shields.io/badge/Coverage-50.5%25-yellow)
+![Coverage](https://img.shields.io/badge/Coverage-49.7%25-yellow)
 [![Go Report Card](https://goreportcard.com/badge/github.com/satmihir/fair)](https://goreportcard.com/report/github.com/satmihir/fair)
 [![GoDoc](https://godoc.org/github.com/satmihir/fair?status.svg)](https://godoc.org/github.com/satmihir/fair)
 
