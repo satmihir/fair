@@ -75,6 +75,8 @@ var newTrackerStructureWithClock = func(
 // where time needs to be controlled. On success the tracker owns the ticker;
 // on failure the caller retains ownership. Like time.Ticker's channel accessor,
 // ticker.C must return without waiting for a tick or for another goroutine.
+// The tracker never lets time move backward: while the clock reads earlier
+// than a time already observed, decay pauses until the clock catches up.
 func NewFairnessTrackerWithClockAndTicker(trackerConfig *config.FairnessTrackerConfig, clock utils.IClock, ticker utils.ITicker) (*FairnessTracker, error) {
 	if trackerConfig == nil {
 		return nil, NewFairnessTrackerError(nil, "trackerConfig must not be nil")
@@ -89,7 +91,9 @@ func NewFairnessTrackerWithClockAndTicker(trackerConfig *config.FairnessTrackerC
 }
 
 // Take the config by value so future rotations use the same settings as the initial pair.
-func newFairnessTracker(cfg config.FairnessTrackerConfig, clock utils.IClock, ticker utils.ITicker) (*FairnessTracker, error) {
+func newFairnessTracker(cfg config.FairnessTrackerConfig, source utils.IClock, ticker utils.ITicker) (*FairnessTracker, error) {
+	// Every generation shares one never-decreasing view of time.
+	clock := newHighWaterClock(source)
 	newStructure := newTrackerStructureWithClock
 	st1, err := newStructure(&cfg, 1, cfg.IncludeStats, clock)
 	if err != nil {
@@ -193,7 +197,9 @@ func (ft *FairnessTracker) RegisterRequest(ctx context.Context, clientIdentifier
 
 	// Only the active structure decides. The standby stays warm through
 	// ReportOutcome; a read there would only apply decay, which each bucket
-	// catches up on by itself the next time it is visited.
+	// catches up on the next time it is visited. Both structures take time
+	// from the tracker's high-water clock, so the standby catches up to the
+	// latest time this read observed even if the underlying clock rewinds.
 	return ft.mainStructure.RegisterRequest(ctx, clientIdentifier)
 }
 

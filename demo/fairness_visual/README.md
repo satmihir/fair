@@ -42,4 +42,4 @@ ffmpeg -i demo/fairness_visual/fair-demo.mov -vf "scale=1920:-2" -pix_fmt yuv420
 The animation uses the deterministic API noisy-neighbor results from `cmd/fairness_eval`:
 
 - No FAIR: Jain `0.2184`, utilization `99.99%`.
-- Tuned FAIR: Jain `0.8498`, utilization `99.28%`.
+- Tuned FAIR: Jain `0.8498`, utilization `99.28%` (historical: from an earlier run of the sweep, not regenerated).

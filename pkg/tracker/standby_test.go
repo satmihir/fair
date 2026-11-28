@@ -97,3 +97,36 @@ func TestReportOutcomeIgnoresUnknownOutcome(t *testing.T) {
 	ticker.tickAndWait(t, ft)
 	require.Zero(t, probability())
 }
+
+// A read can be the only call that observed the latest time. Promotion must
+// not hand decisions to a standby that still believes an earlier one.
+func TestPromotionKeepsDecayObservedBeforeClockRewind(t *testing.T) {
+	cfg := config.DefaultFairnessTrackerConfig()
+	cfg.Pi, cfg.Pd, cfg.Lambda = .5, .25, math.Ln2 // Half-life of one second.
+	cfg.IncludeStats = true
+	clock := &manualClock{now: time.Unix(1_700_000_000, 0)} // Wall time only, so it can rewind.
+	ticker := newFakeTicker()
+	ft, err := NewFairnessTrackerWithClockAndTicker(cfg, clock, ticker)
+	require.NoError(t, err)
+	defer ft.Close()
+
+	ctx, id := context.Background(), []byte("client")
+	probability := func() float64 { return ft.RegisterRequest(ctx, id).ResultStats.FinalProbability }
+
+	ft.ReportOutcome(ctx, id, request.OutcomeFailure)
+	ft.ReportOutcome(ctx, id, request.OutcomeFailure)
+	require.Equal(t, 1., probability())
+
+	clock.Sleep(time.Second)
+	require.InDelta(t, .5, probability(), 1e-12)
+
+	clock.Sleep(-time.Second) // Rewind, then rotate without another outcome.
+	ticker.tickAndWait(t, ft)
+	require.InDelta(t, .5, probability(), 1e-12, "promotion restored a penalty that had already decayed")
+
+	// The repeated second was already counted; only time past it decays.
+	clock.Sleep(time.Second)
+	require.InDelta(t, .5, probability(), 1e-12)
+	clock.Sleep(time.Second)
+	require.InDelta(t, .25, probability(), 1e-12)
+}

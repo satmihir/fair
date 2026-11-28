@@ -108,9 +108,13 @@ func (s *Structure) RegisterRequest(_ context.Context, clientIdentifier []byte) 
 
 	bucketProbabilities := make([]float64, s.config.L)
 
+	// Taken while collecting, before caller-supplied code can touch the slice.
+	minProbability := 1.
+
 	// We can ignore the error since the handler never returns one
 	s.visitBuckets(clientIdentifier, func(l uint32, m uint32, b *bucket) {
 		bucketProbabilities[l] = b.probability
+		minProbability = math.Min(minProbability, b.probability)
 		if s.includeStats {
 			if stats == nil {
 				stats = &request.ResultStats{
@@ -121,7 +125,7 @@ func (s *Structure) RegisterRequest(_ context.Context, clientIdentifier []byte) 
 		}
 	})
 
-	pFinal := s.finalProbability(bucketProbabilities)
+	pFinal := s.finalProbability(bucketProbabilities, minProbability)
 
 	if s.includeStats {
 		stats.BucketProbabilities = bucketProbabilities
@@ -139,16 +143,18 @@ func (s *Structure) RegisterRequest(_ context.Context, clientIdentifier []byte) 
 
 // finalProbability keeps a custom FinalProbabilityFunction from silently
 // switching throttling off or reporting an impossible probability: results
-// outside [0, 1] are clamped, and NaN falls back to the smallest bucket
-// probability (the default function).
-func (s *Structure) finalProbability(bucketProbabilities []float64) float64 {
+// outside [0, 1] are clamped, and NaN falls back to minProbability, the
+// smallest bucket probability (what the default function returns). The
+// caller computes that value itself because the function may modify the
+// slice it is handed.
+func (s *Structure) finalProbability(bucketProbabilities []float64, minProbability float64) float64 {
 	p := s.config.FinalProbabilityFunction(bucketProbabilities)
 	switch {
 	case math.IsNaN(p):
 		s.badProbability.Do(func() {
 			logger.Printf("FinalProbabilityFunction returned NaN; using the minimum bucket probability instead (structure %d, further occurrences are not logged)", s.id)
 		})
-		return config.MinFinalProbabilityFunction(bucketProbabilities)
+		return minProbability
 	case p < 0:
 		return 0
 	case p > 1:

@@ -104,3 +104,20 @@ func TestDecayIgnoresWallClockStep(t *testing.T) {
 		require.InDelta(t, .5, p, 1e-12, "a wall-clock step must not count as elapsed time")
 	}
 }
+
+// The callback owns the slice it is handed, so the fallback cannot rely on it.
+func TestNaNFallbackSurvivesCallbackMutation(t *testing.T) {
+	cfg := validStructureConfig() // Pi is 1: one failure saturates the buckets.
+	cfg.FinalProbabilityFunction = func(buckets []float64) float64 {
+		buckets[0] = math.NaN()
+		return math.NaN()
+	}
+	s, err := NewStructure(&cfg, 1, true)
+	require.NoError(t, err)
+	ctx, id := context.Background(), []byte("client")
+	s.ReportOutcome(ctx, id, request.OutcomeFailure)
+
+	res := s.RegisterRequest(ctx, id)
+	require.Equal(t, 1., res.ResultStats.FinalProbability)
+	require.True(t, res.ShouldThrottle, "a saturated flow must still be throttled")
+}
