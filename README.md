@@ -1,5 +1,4 @@
 # FAIR
-![Coverage](https://img.shields.io/badge/Coverage-50.5%25-yellow)
 [![Go Report Card](https://goreportcard.com/badge/github.com/satmihir/fair)](https://goreportcard.com/report/github.com/satmihir/fair)
 [![GoDoc](https://godoc.org/github.com/satmihir/fair?status.svg)](https://godoc.org/github.com/satmihir/fair)
 
@@ -11,8 +10,8 @@ FAIR is a Go library designed to ensure fairness in resource‑constrained envir
 - [Evaluation](#evaluation)
 - [Installation](#installation)
 - [Quick Start](#quick-start)
-  - [Registering Requests](#registering-requests)
-  - [Reporting Outcomes](#reporting-outcomes)
+  - [Request lifecycle](#request-lifecycle)
+  - [Inspecting stats](#inspecting-stats)
 - [Tuning](#tuning)
 - [Resources](#resources)
 - [License](#license)
@@ -53,95 +52,35 @@ For the API noisy-neighbor workload, a focused FAIR configuration sweep found ma
 
 A browser-based visual demo for the noisy-neighbor case is available in `demo/fairness_visual`. Click the preview above to open the MP4.
 
+The [multi-seed fairness gate](cmd/fairness_eval/README.md) checks equal-client and noisy-neighbor traffic across rotations. For request cost and rotation headroom, see the [benchmark and rollout guide](designs/production-performance.md).
+
 ## Installation
 
 To install the FAIR library, use `go get`:
 
 ```bash
-go get github.com/satmihir/fair
+go get github.com/satmihir/fair/pkg/tracker
 ```
 
 ## Quick Start
 
-### Basic Configuration
+The [runnable quick starts](pkg/tracker/example_test.go) include imports and expected output. From the repository root, run both with:
 
-To use the default config which should work well in most cases:
-
-```go
-trkB := tracker.NewFairnessTrackerBuilder()
-
-trk, err := trkB.BuildWithDefaultConfig()
-defer trk.Close()
+```bash
+go test ./pkg/tracker -run '^Example' -v
 ```
 
-### Custom Configuration
+### Request lifecycle
 
-If you want to make some changes to the config, you can use the setters on the builder:
+Follow `ExampleFairnessTracker` in the [example source](pkg/tracker/example_test.go):
 
-```go
-trkB := tracker.NewFairnessTrackerBuilder()
-// Rotate the underlying hashes every one minute to avoid correlated false positives
-trkB.SetRotationFrequency(1 * time.Minute)
+1. Build one tracker for the shared resource at startup. `NewFairnessTrackerBuilder` starts with defaults; apply any setters before `Build`. Check the build error before using the tracker, and close it at shutdown.
+2. Before attempting to acquire the resource, call `RegisterRequest` with a stable flow ID (for example, a tenant ID). If `ShouldThrottle` is true, reject the request immediately. FAIR makes the decision; your application enforces it. No resource was attempted, so do not report an outcome.
+3. Otherwise, try to acquire the resource. With the same flow ID, report `request.OutcomeSuccess` if you obtained it or `request.OutcomeFailure` if a shortage prevented acquisition. A validation error or network timeout by itself establishes neither: report nothing.
 
-trk, err := trkB.Build()
-defer trk.Close()
-```
-Enabling Stats and Debugging Bucket Details
-To collect and inspect per-bucket statistics for debugging, set IncludeStats to true in your tracker config:
+### Inspecting stats
 
-```go
-
-conf := config.DefaultFairnessTrackerConfig() //default IncludeStats=false
-conf.IncludeStats = true
-tracker, _ := tracker.NewFairnessTracker(conf)
-```
-
-ResultStats contains probabilities and other debugging information collected while registering a request.
-After registering requests or reporting outcomes, you can access bucket stats from the result:
-
-```go
-result := tracker.RegisterRequest(ctx, clientID)
-if result.Stats != nil {
-    log.Printf("Bucket: %v, Requests: %d, Throttled: %d", 
-        result.Stats.BucketID, result.Stats.RequestCount, result.Stats.ThrottledCount)
-}
-```
-
-This helps you debug fairness decisions and monitor workload behavior.
-
-### Registering Requests
-
-For every incoming request, you have to pass the flow identifier (the identifier over which you want to maintain fairness) into the tracker to see if it needs to be throttled. A client ID for example could be such ID to maintain resource fairness among all your clients.
-
-```go
-ctx := context.Background()
-id := []byte("client_id")
-
-resp := trk.RegisterRequest(ctx, id)
-if resp.ShouldThrottle {
-    throttleRequest()
-}
-```
-
-### Reporting Outcomes
-
-For any failure that indicates a shortage of resource (which is our trigger to start throttling), you report outcome as a failure. For any other outcomes that are considered failures in your business logic that don't indicate resource shortage, do not report any outcome.
-
-```go
-ctx := context.Background()
-id := []byte("client_id")
-
-trk.ReportOutcome(ctx, id, request.OutcomeFailure)
-```
-
-On the other hand, when you are able to get the resource, you report success.
-
-```go
-ctx := context.Background()
-id := []byte("client_id")
-
-trk.ReportOutcome(ctx, id, request.OutcomeSuccess)
-```
+See `ExampleFairnessTrackerBuilder_SetIncludeStats` in the [example source](pkg/tracker/example_test.go). Call `SetIncludeStats(true)` before `Build` to inspect individual decisions. `RegisterRequest` returns optional `ResultStats` (nil by default): `FinalProbability` is the probability used for the decision, and `BucketIndexes` and `BucketProbabilities` identify the selected bucket and its probability at each level. These are not per-client request or throttle counts.
 
 ## Tuning
 
