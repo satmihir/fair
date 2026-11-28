@@ -44,3 +44,20 @@ Write clear names for variables, functions, and tests.
 - Be respectful and collaborative.
 - No idea is too small — even typo fixes or doc improvements are valuable.
 - FAIR is about fairness: we aim for fairness in both systems and our community.
+
+## CI and release verification
+
+The `Go` workflow's `verify` job builds the checked-in source, runs the Go suite with coverage and with the race detector, runs the Python rotation conformance test, lints, and checks protobuf regeneration byte for byte. PRs (including stacked PRs) test GitHub's proposed merge commit. A push to `main` tests the actual merged commit; tag pushes test the tagged revision. CI reads repository contents only and does not update badges, create tags, or publish releases.
+
+To reproduce the protobuf check from the repository root on Linux x86_64, run `bash .github/scripts/verify-proto.sh`. It uses temporary output, the SHA-256-pinned protoc 3.20.3 release (including its standard imports), and protoc-gen-go v1.36.10. For an intentional schema change, install those same generator versions, run `make proto`, and include the generated diff in the PR. When updating action pins, check the full commit SHA against the upstream release tag (peel annotated tags to the commit) and update the version comment too.
+
+### Maintainer procedure: tag only a verified commit
+
+1. Merge the reviewed PR to protected `main`. Wait for **the push run on `main`** to pass `verify`; a successful PR merge-ref run is not sufficient. Copy the full commit SHA from the successful push run.
+2. Fetch `origin/main` and tags. Check `git merge-base --is-ancestor "$sha" origin/main` and confirm the intended version tag does not exist locally or on origin. Create the annotated tag at the explicit verified SHA, not at `HEAD` (for example, `git tag -a "$tag" "$sha" -m "$tag"`). Sign it if required by release policy.
+3. Confirm `git rev-parse "$tag^{commit}"` equals that full SHA. Push only the new tag (`git push origin "refs/tags/$tag"`). Before publishing, confirm the remote tag resolves to the same commit and the tag's own `verify` run passed. Stop on mismatch or failure; never move or force-push a published tag.
+
+### Hosted protections (maintainer configuration, not set by this workflow)
+
+- On `main` and protected stack bases, require a reviewed PR, up-to-date status checks and the `verify` check from GitHub Actions. When migrating from older check names, select the new check after its first run. Block force pushes and deletions; restrict bypasses. Require review of workflow and verification-script changes.
+- Set the default Actions token to read-only. Restrict release-tag creation to authorized maintainers and prevent tag updates/deletions with tag rulesets. Confirm these settings in the hosted repository: a workflow file cannot enforce branch or tag protection by itself.
