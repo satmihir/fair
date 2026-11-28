@@ -17,8 +17,8 @@ import (
 type bucket struct {
 	// Probability that a request falling on this bucket should be dropped
 	probability float64
-	// Time in millis since the bucket was last updated
-	lastUpdatedTimeMillis uint64
+	// Latest Unix millisecond used for decay; never moves backward.
+	lastUpdatedTimeMillis int64
 	// Mutex protects the state of this bucket from concurrent access
 	mu sync.Mutex
 }
@@ -26,7 +26,7 @@ type bucket struct {
 func newBucket(clock utils.IClock) *bucket {
 	return &bucket{
 		probability:           0,
-		lastUpdatedTimeMillis: uint64(clock.Now().UnixMilli()),
+		lastUpdatedTimeMillis: clock.Now().UnixMilli(),
 	}
 }
 
@@ -143,7 +143,6 @@ func (s *Structure) ReportOutcome(_ context.Context, clientIdentifier []byte, ou
 
 	s.visitBuckets(clientIdentifier, func(_ uint32, _ uint32, b *bucket) {
 		b.probability = math.Max(0, math.Min(1, b.probability+adjustment))
-		b.lastUpdatedTimeMillis = s.currentMillis()
 	})
 
 	return &request.ReportOutcomeResult{}
@@ -161,20 +160,16 @@ func (s *Structure) visitBuckets(clientIdentifier []byte, fn func(uint32, uint32
 
 		buck.mu.Lock()
 
-		cur := s.currentMillis()
-		deltaT := cur - buck.lastUpdatedTimeMillis
-		pm := adjustProbability(buck.probability, s.config.Lambda, deltaT)
-
-		buck.lastUpdatedTimeMillis = cur
-		buck.probability = pm
+		if now := s.clock.Now().UnixMilli(); now > buck.lastUpdatedTimeMillis {
+			// Compare signed timestamps first; their positive difference fits in uint64.
+			elapsed := uint64(now) - uint64(buck.lastUpdatedTimeMillis)
+			buck.probability = adjustProbability(buck.probability, s.config.Lambda, elapsed)
+			buck.lastUpdatedTimeMillis = now
+		}
 
 		fn(uint32(l), m, buck)
 		buck.mu.Unlock()
 	}
-}
-
-func (s *Structure) currentMillis() uint64 {
-	return uint64(s.clock.Now().UnixMilli())
 }
 
 // Calculate n hashes of the given input using murmur hash.
