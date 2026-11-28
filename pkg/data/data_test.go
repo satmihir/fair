@@ -422,3 +422,34 @@ func TestReportOutcomeClamping_Concurrent(t *testing.T) {
 		})
 	}
 }
+
+type decayClock struct{ millis int64 }
+
+func (c *decayClock) Now() time.Time        { return time.UnixMilli(c.millis) }
+func (c *decayClock) Sleep(d time.Duration) { c.millis += d.Milliseconds() }
+
+func TestDecayClockRollback(t *testing.T) {
+	cfg := validStructureConfig()
+	cfg.Pi, cfg.Pd, cfg.Lambda = .5, .125, math.Ln2 // Half-life of one second.
+	clock := &decayClock{millis: -500}
+	s, err := NewStructureWithClock(&cfg, 1, true, clock)
+	require.NoError(t, err)
+	ctx, id := context.Background(), []byte("client")
+	check := func(millis int64, want float64) {
+		t.Helper()
+		clock.millis = millis
+		for _, p := range s.RegisterRequest(ctx, id).ResultStats.BucketProbabilities {
+			require.InDelta(t, want, p, 1e-12, "at %d ms", millis)
+		}
+	}
+
+	s.ReportOutcome(ctx, id, request.OutcomeFailure)
+	check(500, .25) // Forward decay across the epoch establishes a new high-water mark.
+	check(-500, .25)
+	s.ReportOutcome(ctx, id, request.OutcomeFailure)
+	check(-250, .75)
+	s.ReportOutcome(ctx, id, request.OutcomeSuccess)
+	check(0, .625)
+	check(500, .625)   // Catch-up must not count the interval a second time.
+	check(1500, .3125) // Only the second after catch-up decays.
+}
