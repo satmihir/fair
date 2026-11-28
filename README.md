@@ -46,8 +46,6 @@ Headline results with the default FAIR configuration:
 | API noisy neighbors | 0.2184 | 0.6621 | +203.2% | 99.97% |
 | Batch surge | 0.7497 | 0.9970 | +33.0% | 89.34% |
 
-For the API noisy-neighbor workload, a focused FAIR configuration sweep found materially higher fairness. The figures in this paragraph are historical: they come from an earlier run of the sweep and have not been regenerated, so do not compare them with the table above. In that run the strongest practical point used `MinFinalProbabilityFunction`, `tolerableBadRequestsPerBadFlow=60`, `Lambda=0`, and at least 1,500 buckets per level, reaching a Jain score of 0.8498 with 99.28% utilization, a +289.1% improvement over no FAIR.
-
 [![FAIR noisy-neighbor visual demo](demo/fairness_visual/fair-demo-thumbnail.png)](demo/fairness_visual/fair-demo.mp4)
 
 A browser-based visual demo for the noisy-neighbor case is available in `demo/fairness_visual`. Click the preview above to open the MP4.
