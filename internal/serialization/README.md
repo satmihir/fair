@@ -1,5 +1,10 @@
 # Protocol Buffer Code Generation Guide
 
+**Status: internal and not wired to the tracker.** This package lives under `internal/` so that it is not part of the module's public API. Nothing in the tracker reads or writes these messages yet, and the schema predates two changes to the data structure, so revise it before using it:
+
+- Buckets are placed with SipHash-2-4 under a 128-bit key. The schema still describes `MURMURHASH_32` with a 32-bit seed.
+- A bucket's last-update time is a signed count of milliseconds since its structure was built, not an unsigned wall-clock timestamp.
+
 This package provides serialization and deserialization APIs for the FairStruct Protocol Buffer message. The Go code (`v1.pb.go`) is generated from the Protocol Buffer definition (`v1.proto`).
 
 ## Creating and Managing pb.go Files

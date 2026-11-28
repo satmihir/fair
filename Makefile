@@ -5,7 +5,7 @@
 # Generate Protocol Buffer code
 proto:
 	@echo "Generating Protocol Buffer code..."
-	@cd pkg/serialization && protoc --go_out=. --go_opt=paths=source_relative v1.proto
+	@cd internal/serialization && protoc --go_out=. --go_opt=paths=source_relative v1.proto
 	@echo "✅ Proto generation completed"
 
 # Build the project

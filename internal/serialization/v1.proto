@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package fair.data.v1;
 
-option go_package = "github.com/satmihir/fair/pkg/serialization";
+option go_package = "github.com/satmihir/fair/internal/serialization";
 
 import "google/protobuf/duration.proto";
 

@@ -11,7 +11,7 @@ curl --fail --silent --show-error --location --retry 3 \
 # The generator needs Go >= 1.23; this override does not change the project's build toolchain.
 GOBIN="$tools/bin" GOTOOLCHAIN=go1.23.12 go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.36.10
 mkdir "$tools/out"
-cd pkg/serialization
+cd internal/serialization
 "$tools/bin/protoc" -I . -I "$tools/include" --plugin="protoc-gen-go=$tools/bin/protoc-gen-go" \
   --go_out="$tools/out" --go_opt=paths=source_relative v1.proto
 diff -u v1.pb.go "$tools/out/v1.pb.go"

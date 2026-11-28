@@ -16,11 +16,13 @@ The codebase is organized as follows:
     - **`tracker/`**: The main entry point and logic for the fairness tracker.
     - **`config/`**: Configuration structures and defaults.
     - **`data/`**: Underlying data structures (e.g., Bloom Filters).
-    - **`serialization/`**: Protobuf definitions and generated code.
     - **`request/`**: Request and response models.
     - **`logger/`**: Logging interface and default implementations.
     - **`integration/`**: Integration tests.
 - **`conformance/`**: Black-box tracker protocol and rotation grader. Run `python3 conformance/test_reference.py` to check the Go reference and detect a broken standby update.
+- **`internal/`**: Code that is not part of the public API.
+    - **`serialization/`**: Protobuf definitions and generated code. Not wired to the tracker yet.
+    - **`simticker/`**: A ticker that drives rotations under a simulation clock.
 - **`designs/`**: Design documents and templates.
 - **`mutations/`**: Mutation testing resources, including diffs and drivers.
 - **`tasks.go`**: A Go script for running maintenance tasks (like linting).
@@ -33,7 +35,7 @@ You must use the following commands to build, test, and verify your work.
 ### Build and Test
 
 - **Generate Protobufs**: `make proto`
-    - Run this with protoc 3.20.3 and protoc-gen-go v1.36.10 if you modify `pkg/serialization/v1.proto`. On Linux x86_64, `bash .github/scripts/verify-proto.sh` reproduces CI's pinned, byte-for-byte check without modifying the source tree.
+    - Run this with protoc 3.20.3 and protoc-gen-go v1.36.10 if you modify `internal/serialization/v1.proto`. On Linux x86_64, `bash .github/scripts/verify-proto.sh` reproduces CI's pinned, byte-for-byte check without modifying the source tree.
 - **Build**: `make build`
     - Compiles the project.
 - **Test**: `make test`
@@ -74,7 +76,7 @@ For more details on contributing, refer to [CONTRIBUTING.md](./CONTRIBUTING.md).
     - Run `make test` to verify no regressions.
 
 2.  **Updating Protobufs**:
-    - Edit `pkg/serialization/v1.proto`.
+    - Edit `internal/serialization/v1.proto`.
     - Run `make proto` to regenerate code.
     - Commit the generated files.
 
