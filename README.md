@@ -171,7 +171,7 @@ For manual configurations, use positive dimensions, `0 < Pd < Pi <= 1`, a finite
 **Allocation limit:** All constructors and the tuner reject dimensions whose estimated peak bucket storage exceeds `config.MaxRotationBytes` (64 MiB per tracker). The estimate is `3 × (4096 + L × (64 + 64 × M))` bytes: two live structures plus the replacement built on rotation, with allowances for rows, bucket objects, and pointers. This is a guardrail on dimensions, not a cap on process RSS: leave headroom for GC, concurrent requests, other trackers, and the application. If tuning exceeds the limit, revisit the expected flow count and bucket count rather than relying on a partial allocation.
 
 ## Logging
-Fair provides logs present which by default are disabled.
+Logging is disabled by default. If rebuilding a generation fails, the tracker keeps serving with its current pair and retries on the next tick. Poll `trk.RotationStatus()` for monitoring: `Failures` is cumulative and `LastError` clears after the next successful rotation. Neither requires enabling a logger. The retry applies to errors returned by construction, not process-level out-of-memory failures.
 package `logger` exposes an interface with `GetLogger` and `SetLogger` methods.
 
 It also provides an out of the box logger based on std lib. Here's how you can enable it:

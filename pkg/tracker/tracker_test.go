@@ -10,7 +10,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/satmihir/fair/pkg/config"
-	"github.com/satmihir/fair/pkg/logger"
 	"github.com/satmihir/fair/pkg/request"
 	"github.com/satmihir/fair/pkg/testutils"
 	"github.com/satmihir/fair/pkg/utils"
@@ -138,20 +137,6 @@ func (f *fakeTracker) ReportOutcome(_ context.Context, _ []byte, _ request.Outco
 
 func (f *fakeTracker) Close() {}
 
-type fatalCaptureLogger struct {
-	fatalCh chan string
-}
-
-func (l *fatalCaptureLogger) Printf(_ string, _ ...any) {}
-func (l *fatalCaptureLogger) Print(_ ...any)            {}
-func (l *fatalCaptureLogger) Println(_ ...any)          {}
-func (l *fatalCaptureLogger) Fatalf(format string, args ...any) {
-	select {
-	case l.fatalCh <- fmt.Sprintf(format, args...):
-	default:
-	}
-}
-
 func TestNewFairnessTrackerWithClockAndTicker_FirstStructureError(t *testing.T) {
 	prevConstructor := newTrackerStructureWithClock
 	t.Cleanup(func() {
@@ -193,42 +178,66 @@ func TestNewFairnessTrackerWithClockAndTicker_SecondStructureError(t *testing.T)
 	require.Contains(t, err.Error(), "Failed to create a structure")
 }
 
-func TestNewFairnessTrackerWithClockAndTicker_RotationStructureError(t *testing.T) {
-	prevConstructor := newTrackerStructureWithClock
-	prevLogger := logger.GetLogger()
-	t.Cleanup(func() {
-		newTrackerStructureWithClock = prevConstructor
-		logger.SetLogger(prevLogger)
-	})
-
-	fatalCh := make(chan string, 1)
-	logger.SetLogger(&fatalCaptureLogger{fatalCh: fatalCh})
-
-	call := 0
-	newTrackerStructureWithClock = func(_ *config.FairnessTrackerConfig, id uint64, _ bool, _ utils.IClock) (request.Tracker, error) {
-		call++
-		if call <= 2 {
-			return &fakeTracker{id: id}, nil
+func TestRotationRecoversAfterStructureError(t *testing.T) {
+	newStructure := newTrackerStructureWithClock
+	t.Cleanup(func() { newTrackerStructureWithClock = newStructure })
+	errRotation := fmt.Errorf("rotation creation failed")
+	calls := 0
+	newTrackerStructureWithClock = func(cfg *config.FairnessTrackerConfig, id uint64, stats bool, clock utils.IClock) (request.Tracker, error) {
+		calls++
+		if calls == 3 { // First rotation, after both initial structures.
+			return nil, errRotation
 		}
-		return nil, fmt.Errorf("rotation creation failed")
+		return newStructure(cfg, id, stats, clock)
 	}
 
+	cfg := config.DefaultFairnessTrackerConfig()
+	cfg.IncludeStats = true
+	cfg.Lambda = 0 // Keep probabilities exact across manual ticks.
+	cfg.Pi = 0.25
 	ticker := newFakeTicker()
-	ft, err := NewFairnessTrackerWithClockAndTicker(config.DefaultFairnessTrackerConfig(), utils.NewRealClock(), ticker)
+	ft, err := NewFairnessTrackerWithClockAndTicker(cfg, utils.NewRealClock(), ticker)
 	require.NoError(t, err)
-	require.NotNil(t, ft)
+	t.Cleanup(ft.Close)
+
+	checkIDs := func(mainID, secondaryID uint64) {
+		t.Helper()
+		ft.rotationLock.RLock()
+		defer ft.rotationLock.RUnlock()
+		require.Equal(t, mainID, ft.mainStructure.GetID())
+		require.Equal(t, secondaryID, ft.secondaryStructure.GetID())
+	}
+	ctx, client := context.Background(), []byte("client")
+	checkProbability := func(want float64) {
+		t.Helper()
+		stats := ft.RegisterRequest(ctx, client).ResultStats
+		require.NotNil(t, stats)
+		require.Equal(t, want, stats.FinalProbability)
+	}
+	checkIDs(1, 2)
+	status := ft.RotationStatus()
+	require.Zero(t, status.Failures)
+	require.NoError(t, status.LastError)
+	ft.ReportOutcome(ctx, client, request.OutcomeFailure)
+	checkProbability(0.25)
 
 	ticker.ch <- time.Now()
+	require.Eventually(t, func() bool { return ft.RotationStatus().Failures != 0 }, time.Second, time.Millisecond)
+	status = ft.RotationStatus()
+	require.Equal(t, uint64(1), status.Failures)
+	require.ErrorContains(t, status.LastError, errRotation.Error())
+	checkIDs(1, 2)
+	checkProbability(0.25)
+	ft.ReportOutcome(ctx, client, request.OutcomeFailure)
+	checkProbability(0.5)
 
-	select {
-	case msg := <-fatalCh:
-		require.Contains(t, msg, "failed to create a structure during rotation")
-	case <-time.After(500 * time.Millisecond):
-		t.Fatalf("expected fatal log during rotation failure")
-	}
-
-	ft.Close()
-	require.True(t, ticker.stopped)
+	ticker.ch <- time.Now()
+	require.Eventually(t, func() bool { return ft.RotationStatus().LastError == nil }, time.Second, time.Millisecond)
+	status = ft.RotationStatus()
+	require.Equal(t, uint64(1), status.Failures)
+	require.NoError(t, status.LastError)
+	checkIDs(2, 3) // Promote the warm standby and reuse the failed candidate's ID.
+	checkProbability(0.5)
 }
 
 func TestNewFairnessTrackerRejectsInvalidRotationFrequency(t *testing.T) {
