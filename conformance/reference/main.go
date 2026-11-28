@@ -11,6 +11,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/satmihir/fair/internal/simticker"
 	"github.com/satmihir/fair/pkg/config"
 	"github.com/satmihir/fair/pkg/request"
 	"github.com/satmihir/fair/pkg/tracker"
@@ -21,37 +22,19 @@ type fixedClock struct{}
 func (fixedClock) Now() time.Time      { return time.Unix(1, 0) }
 func (fixedClock) Sleep(time.Duration) {}
 
-type manualTicker struct {
-	ticks chan time.Time
-	ready chan struct{}
-}
-
-func (t manualTicker) C() <-chan time.Time {
-	t.ready <- struct{}{}
-	return t.ticks
-}
-
-func (manualTicker) Stop() {}
-
-// The tracker calls C again only after installing the rotated structures.
-func (t manualTicker) rotate() {
-	t.ticks <- fixedClock{}.Now()
-	<-t.ready
-}
-
 func run(in io.Reader, out io.Writer) error {
 	cfg := &config.FairnessTrackerConfig{
 		L: 3, M: 64, Pi: 0.25, Pd: 0.125, Lambda: 0.1,
 		IncludeStats:             true,
 		FinalProbabilityFunction: config.MinFinalProbabilityFunction,
 	}
-	ticker := manualTicker{ticks: make(chan time.Time), ready: make(chan struct{})}
-	ft, err := tracker.NewFairnessTrackerWithClockAndTicker(cfg, fixedClock{}, ticker)
+	clock := fixedClock{}
+	ticker := simticker.New()
+	ft, err := tracker.NewFairnessTrackerWithClockAndTicker(cfg, clock, ticker)
 	if err != nil {
 		return err
 	}
 	defer ft.Close()
-	<-ticker.ready // Consume the initial C call; later calls acknowledge rotations.
 
 	ctx := context.Background()
 	dec, enc := json.NewDecoder(in), json.NewEncoder(out)
@@ -78,7 +61,9 @@ func run(in io.Reader, out io.Writer) error {
 		case "success":
 			ft.ReportOutcome(ctx, client, request.OutcomeSuccess)
 		case "rotate":
-			ticker.rotate()
+			if err := ticker.Rotate(ft, clock.Now()); err != nil {
+				return fmt.Errorf("rotate: %w", err)
+			}
 		default:
 			return fmt.Errorf("unknown operation %q", cmd.Op)
 		}

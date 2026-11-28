@@ -2,6 +2,7 @@ package tracker
 
 import (
 	"context"
+	"hash/maphash"
 	"sync"
 
 	"github.com/satmihir/fair/pkg/config"
@@ -23,6 +24,10 @@ type FairnessTracker struct {
 	mainStructure      request.Tracker
 	secondaryStructure request.Tracker
 
+	// A stable stripe per client orders its updates without retaining client IDs.
+	outcomeSeed  maphash.Seed
+	outcomeLocks [64]sync.Mutex
+
 	ticker utils.ITicker
 
 	// Rotation lock to ensure that we don't rotate while updating the structures
@@ -31,11 +36,15 @@ type FairnessTracker struct {
 	rotationLock   sync.RWMutex
 	rotationStatus RotationStatus // protected by rotationLock
 	stopRotation   chan struct{}
+	rotationDone   chan struct{}
+	closeOnce      sync.Once
 }
 
 // RotationStatus describes background rotation attempts for one tracker.
 // The initial construction is not counted as a rotation attempt.
 type RotationStatus struct {
+	// Rotations counts successful promotions over the lifetime of the tracker.
+	Rotations uint64
 	// Failures counts failed attempts over the lifetime of the tracker.
 	Failures uint64
 	// LastError is the most recent rotation error, cleared on successful rotation.
@@ -61,7 +70,8 @@ var newTrackerStructureWithClock = func(
 // NewFairnessTrackerWithClockAndTicker creates a FairnessTracker using the
 // provided clock and ticker. It is primarily used for tests and simulations
 // where time needs to be controlled. On success the tracker owns the ticker;
-// on failure the caller retains ownership.
+// on failure the caller retains ownership. Like time.Ticker's channel accessor,
+// ticker.C must return without waiting for a tick or for another goroutine.
 func NewFairnessTrackerWithClockAndTicker(trackerConfig *config.FairnessTrackerConfig, clock utils.IClock, ticker utils.ITicker) (*FairnessTracker, error) {
 	if trackerConfig == nil {
 		return nil, NewFairnessTrackerError(nil, "trackerConfig must not be nil")
@@ -99,21 +109,33 @@ func newFairnessTracker(cfg config.FairnessTrackerConfig, clock utils.IClock, ti
 		mainStructure:      st1,
 		secondaryStructure: st2,
 
-		ticker: ticker,
+		outcomeSeed: maphash.MakeSeed(),
+		ticker:      ticker,
 
-		rotationLock: sync.RWMutex{},
 		stopRotation: stopRotation,
+		rotationDone: make(chan struct{}),
 	}
 
 	// Start a periodic task to rotate underlying structures to keep
 	// changing the hash seeds so we don't continue punishing the same
 	// innocent workloads repeatedly in the worst case of a false positive.
 	go func() {
+		defer close(ft.rotationDone)
+		ticks := ticker.C()
 		for {
 			select {
 			case <-stopRotation:
 				return
-			case <-ticker.C():
+			case _, ok := <-ticks:
+				if !ok {
+					return
+				}
+				// If both cases were ready, don't start another allocation.
+				select {
+				case <-stopRotation:
+					return
+				default:
+				}
 				s, err := newStructure(&cfg, ft.structureIDCounter, cfg.IncludeStats, clock)
 				if err != nil {
 					ft.rotationLock.Lock()
@@ -128,6 +150,7 @@ func newFairnessTracker(cfg config.FairnessTrackerConfig, clock utils.IClock, ti
 				ft.rotationLock.Lock()
 				ft.mainStructure = ft.secondaryStructure
 				ft.secondaryStructure = s
+				ft.rotationStatus.Rotations++
 				ft.rotationStatus.LastError = nil
 				ft.rotationLock.Unlock()
 			}
@@ -173,10 +196,19 @@ func (ft *FairnessTracker) RegisterRequest(ctx context.Context, clientIdentifier
 	return resp
 }
 
-// ReportOutcome updates the trackers with the outcome of the request from the
-// given client identifier.
+func (ft *FairnessTracker) outcomeLock(clientIdentifier []byte) *sync.Mutex {
+	return &ft.outcomeLocks[maphash.Bytes(ft.outcomeSeed, clientIdentifier)%uint64(len(ft.outcomeLocks))]
+}
+
+// ReportOutcome applies an outcome to the active and standby structures. For
+// the same client, overlapping reports may run in either order, but both
+// structures see the same order. Rotation never splits a single report.
 func (ft *FairnessTracker) ReportOutcome(ctx context.Context, clientIdentifier []byte, outcome request.Outcome) *request.ReportOutcomeResult {
-	// We must take the rotation lock to avoid rotation while updating the structures
+	// Wait for this client's turn before pinning a generation pair.
+	mu := ft.outcomeLock(clientIdentifier)
+	mu.Lock()
+	defer mu.Unlock()
+
 	ft.rotationLock.RLock()
 	defer ft.rotationLock.RUnlock()
 
@@ -188,8 +220,16 @@ func (ft *FairnessTracker) ReportOutcome(ctx context.Context, clientIdentifier [
 	return resp
 }
 
-// Close stops the background rotation goroutine and releases ticker resources.
+// Close stops background rotation and releases the ticker. It is safe to call
+// repeatedly or concurrently. Every caller waits for the rotation worker to
+// exit; an in-flight rotation may finish before Close returns. RegisterRequest
+// and ReportOutcome remain usable with the final active and standby structures.
+// Do not call Close from inside a tracker callback: rotation may be waiting
+// for that callback to return.
 func (ft *FairnessTracker) Close() {
-	close(ft.stopRotation)
-	ft.ticker.Stop()
+	ft.closeOnce.Do(func() {
+		close(ft.stopRotation)
+		<-ft.rotationDone
+		ft.ticker.Stop()
+	})
 }
