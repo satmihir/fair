@@ -7,8 +7,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/spaolacci/murmur3"
-
 	"github.com/satmihir/fair/pkg/config"
 	"github.com/satmihir/fair/pkg/logger"
 	"github.com/satmihir/fair/pkg/request"
@@ -38,8 +36,9 @@ type Structure struct {
 	config config.FairnessTrackerConfig
 	// The unique ID of the structure
 	id uint64
-	// The murmur hash seed
-	murmurSeed uint32
+	// Secret SipHash key that places clients in buckets; fresh per structure,
+	// so every rotation reshuffles which clients share a bucket.
+	hashKey [2]uint64
 	// The clock to use for getting the time
 	clock utils.IClock
 	// Construction time. Decay measures elapsed time from here with Time.Sub,
@@ -80,7 +79,7 @@ func NewStructureWithClock(input *config.FairnessTrackerConfig, id uint64, inclu
 		levels:       levels,
 		config:       cfg,
 		id:           id,
-		murmurSeed:   rand.Uint32(),
+		hashKey:      newHashKey(),
 		clock:        clock,
 		epoch:        clock.Now(),
 		includeStats: includeStats,
@@ -187,17 +186,16 @@ func (s *Structure) ReportOutcome(_ context.Context, clientIdentifier []byte, ou
 // Visit the buckets belonging to the given clientIdentifier
 // Also takes the bucket lock and manages probability decay prior to calling the handler
 func (s *Structure) visitBuckets(clientIdentifier []byte, fn func(uint32, uint32, *bucket)) {
-	levelHashes := generateNHashesUsing64Bit(clientIdentifier, s.config.L, s.murmurSeed)
+	hash := sipHash24(s.hashKey[0], s.hashKey[1], clientIdentifier)
 
 	// One reading serves every level. A bucket that a concurrent visitor has
 	// already advanced past it is left alone by the comparison below.
 	// Sub saturates at about 292 years, so the subtraction cannot overflow.
 	now := s.clock.Now().Sub(s.epoch).Milliseconds()
 
-	for l := 0; l < int(s.config.L); l++ {
-		lvl := s.levels[l]
-		m := levelHashes[l] % s.config.M
-		buck := lvl[m]
+	for l := uint32(0); l < s.config.L; l++ {
+		m := levelIndex(hash, l, s.config.M)
+		buck := s.levels[l][m]
 
 		buck.mu.Lock()
 
@@ -207,32 +205,19 @@ func (s *Structure) visitBuckets(clientIdentifier []byte, fn func(uint32, uint32
 			buck.lastUpdatedTimeMillis = now
 		}
 
-		fn(uint32(l), m, buck)
+		fn(l, m, buck)
 		buck.mu.Unlock()
 	}
 }
 
-// Calculate n hashes of the given input using murmur hash.
-// To optimize, we only calculate a single 64-bit hash and use a technique outlined in
-// the paper below to compute more based on them:
-// https://www.eecs.harvard.edu/~michaelm/postscripts/rsa2008.pdf
-func generateNHashesUsing64Bit(input []byte, n uint32, seed uint32) []uint32 {
-	// Compute the 64-bit hash
-	h := murmur3.New64WithSeed(seed)
-	h.Write(input)
-	hash64 := h.Sum64()
-
-	// Split the 64-bit hash into two 32-bit hashes
-	hash1 := uint32(hash64)       // Lower 32 bits
-	hash2 := uint32(hash64 >> 32) // Upper 32 bits
-
-	// Generate the n hashes using the combination: hash_i = hash1 + i * hash2
-	hashes := make([]uint32, n)
-	for i := range hashes {
-		hashes[i] = hash1 + uint32(i)*hash2
-	}
-
-	return hashes
+// newHashKey draws a 128-bit key from math/rand's package-level generator,
+// the same source the throttling decision uses. Unless the process calls the
+// deprecated rand.Seed, that generator is seeded from the operating system and
+// is not predictable from its output (ChaCha8 since Go 1.22). A process that
+// does call rand.Seed makes the keys reproducible, which simulations rely on
+// and production services should avoid.
+func newHashKey() [2]uint64 {
+	return [2]uint64{rand.Uint64(), rand.Uint64()}
 }
 
 // AdjustProbability applies exponential decay to the given probability.

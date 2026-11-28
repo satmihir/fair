@@ -43,8 +43,8 @@ Headline results with the default FAIR configuration:
 
 | Scenario | No FAIR Jain | FAIR Jain | Improvement | Utilization with FAIR |
 | --- | ---: | ---: | ---: | ---: |
-| API noisy neighbors | 0.2184 | 0.6599 | +202.2% | 99.95% |
-| Batch surge | 0.7497 | 0.9964 | +32.9% | 89.26% |
+| API noisy neighbors | 0.2184 | 0.6513 | +198.2% | 99.96% |
+| Batch surge | 0.7497 | 0.9968 | +33.0% | 89.24% |
 
 For the API noisy-neighbor workload, a focused FAIR configuration sweep found materially higher fairness. The figures in this paragraph are historical: they come from an earlier run of the sweep and have not been regenerated, so do not compare them with the table above. In that run the strongest practical point used `MinFinalProbabilityFunction`, `tolerableBadRequestsPerBadFlow=60`, `Lambda=0`, and at least 1,500 buckets per level, reaching a Jain score of 0.8498 with 99.28% utilization, a +289.1% improvement over no FAIR.
 
@@ -108,6 +108,8 @@ Tracker construction takes a snapshot of the config, so you can reuse a builder 
 For manual configurations, use positive dimensions, `0 < Pd < Pi <= 1`, a finite nonnegative `Lambda` (zero disables decay), and a non-nil probability function. `NewFairnessTracker` also needs a positive rotation interval; a manually supplied ticker controls its own cadence. Check construction and tuning errors before using the tracker.
 
 **Allocation limit:** All constructors and the tuner reject dimensions whose estimated peak bucket storage exceeds `config.MaxRotationBytes` (64 MiB per tracker). The estimate is `3 × (4096 + L × (64 + 64 × M))` bytes: two live structures plus the replacement built on rotation, with allowances for rows, bucket objects, and pointers. This is a guardrail on dimensions, not a cap on process RSS: leave headroom for GC, concurrent requests, other trackers, and the application. If tuning exceeds the limit, revisit the expected flow count and bucket count rather than relying on a partial allocation.
+
+**Client identifiers:** Identifiers are placed with SipHash-2-4 under a secret 128-bit key that is redrawn for every generation, and each level picks its bucket independently. A client that chooses its own identifier therefore cannot aim it at another client's buckets, and two clients share every level only by chance (about `1/M^L`). The key comes from `math/rand`'s package-level generator, as does the throttling decision. Do not call the deprecated `rand.Seed` in a production process: it makes both reproducible.
 
 ## Logging
 Logging is disabled by default. If rebuilding a generation fails, the tracker keeps serving with its current pair and retries on the next tick. Poll `trk.RotationStatus()` for monitoring: `Failures` is cumulative and `LastError` clears after the next successful rotation. Neither requires enabling a logger. The retry applies to errors returned by construction, not process-level out-of-memory failures.
