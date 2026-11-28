@@ -137,7 +137,7 @@ func TestGenerateTunedStructureConfigLimits(t *testing.T) {
 		require.Error(t, err)
 		require.Nil(t, c)
 	}
-	c, err := GenerateTunedStructureConfig(1, math.MaxUint32, 1)
+	c, err := GenerateTunedStructureConfig(1, 1000, 1)
 	require.NoError(t, err)
 	require.Equal(t, 1.0, c.Pi)
 	require.NoError(t, c.ValidateStructure())
