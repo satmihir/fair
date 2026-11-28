@@ -38,6 +38,9 @@ type FairnessTracker struct {
 	stopRotation   chan struct{}
 	rotationDone   chan struct{}
 	closeOnce      sync.Once
+
+	// Logs the first unknown outcome only, so a caller bug cannot flood the log.
+	unknownOutcome sync.Once
 }
 
 // RotationStatus describes background rotation attempts for one tracker.
@@ -72,6 +75,8 @@ var newTrackerStructureWithClock = func(
 // where time needs to be controlled. On success the tracker owns the ticker;
 // on failure the caller retains ownership. Like time.Ticker's channel accessor,
 // ticker.C must return without waiting for a tick or for another goroutine.
+// The tracker never lets time move backward: while the clock reads earlier
+// than a time already observed, decay pauses until the clock catches up.
 func NewFairnessTrackerWithClockAndTicker(trackerConfig *config.FairnessTrackerConfig, clock utils.IClock, ticker utils.ITicker) (*FairnessTracker, error) {
 	if trackerConfig == nil {
 		return nil, NewFairnessTrackerError(nil, "trackerConfig must not be nil")
@@ -86,7 +91,9 @@ func NewFairnessTrackerWithClockAndTicker(trackerConfig *config.FairnessTrackerC
 }
 
 // Take the config by value so future rotations use the same settings as the initial pair.
-func newFairnessTracker(cfg config.FairnessTrackerConfig, clock utils.IClock, ticker utils.ITicker) (*FairnessTracker, error) {
+func newFairnessTracker(cfg config.FairnessTrackerConfig, source utils.IClock, ticker utils.ITicker) (*FairnessTracker, error) {
+	// Every generation shares one never-decreasing view of time.
+	clock := newHighWaterClock(source)
 	newStructure := newTrackerStructureWithClock
 	st1, err := newStructure(&cfg, 1, cfg.IncludeStats, clock)
 	if err != nil {
@@ -188,12 +195,12 @@ func (ft *FairnessTracker) RegisterRequest(ctx context.Context, clientIdentifier
 	ft.rotationLock.RLock()
 	defer ft.rotationLock.RUnlock()
 
-	resp := ft.mainStructure.RegisterRequest(ctx, clientIdentifier)
-
-	// To keep the bad workloads data "warm" in the rotated structure, we will update both
-	ft.secondaryStructure.RegisterRequest(ctx, clientIdentifier)
-
-	return resp
+	// Only the active structure decides. The standby stays warm through
+	// ReportOutcome; a read there would only apply decay, which each bucket
+	// catches up on the next time it is visited. Both structures take time
+	// from the tracker's high-water clock, so the standby catches up to the
+	// latest time this read observed even if the underlying clock rewinds.
+	return ft.mainStructure.RegisterRequest(ctx, clientIdentifier)
 }
 
 func (ft *FairnessTracker) outcomeLock(clientIdentifier []byte) *sync.Mutex {
@@ -203,7 +210,15 @@ func (ft *FairnessTracker) outcomeLock(clientIdentifier []byte) *sync.Mutex {
 // ReportOutcome applies an outcome to the active and standby structures. For
 // the same client, overlapping reports may run in either order, but both
 // structures see the same order. Rotation never splits a single report.
+// An outcome other than OutcomeSuccess or OutcomeFailure is ignored.
 func (ft *FairnessTracker) ReportOutcome(ctx context.Context, clientIdentifier []byte, outcome request.Outcome) *request.ReportOutcomeResult {
+	if outcome != request.OutcomeSuccess && outcome != request.OutcomeFailure {
+		ft.unknownOutcome.Do(func() {
+			logger.Printf("ignoring unknown outcome %d; further occurrences are not logged", outcome)
+		})
+		return &request.ReportOutcomeResult{}
+	}
+
 	// Wait for this client's turn before pinning a generation pair.
 	mu := ft.outcomeLock(clientIdentifier)
 	mu.Lock()
