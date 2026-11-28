@@ -2,12 +2,13 @@ package data
 
 import (
 	"context"
+	crand "crypto/rand"
+	"encoding/binary"
+	"io"
 	"math"
 	"math/rand"
 	"sync"
 	"time"
-
-	"github.com/spaolacci/murmur3"
 
 	"github.com/satmihir/fair/pkg/config"
 	"github.com/satmihir/fair/pkg/logger"
@@ -38,8 +39,9 @@ type Structure struct {
 	config config.FairnessTrackerConfig
 	// The unique ID of the structure
 	id uint64
-	// The murmur hash seed
-	murmurSeed uint32
+	// Secret SipHash key that places clients in buckets; fresh per structure,
+	// so every rotation reshuffles which clients share a bucket.
+	hashKey [2]uint64
 	// The clock to use for getting the time
 	clock utils.IClock
 	// Construction time. Decay measures elapsed time from here with Time.Sub,
@@ -67,6 +69,11 @@ func NewStructureWithClock(input *config.FairnessTrackerConfig, id uint64, inclu
 		return nil, NewDataError(nil, "clock cannot be nil")
 	}
 
+	hashKey, err := newHashKey(cfg.HashKeySource)
+	if err != nil {
+		return nil, NewDataError(err, "failed to generate a hash key")
+	}
+
 	levels := make([][]*bucket, cfg.L)
 	for i := range levels {
 		levels[i] = make([]*bucket, cfg.M)
@@ -80,7 +87,7 @@ func NewStructureWithClock(input *config.FairnessTrackerConfig, id uint64, inclu
 		levels:       levels,
 		config:       cfg,
 		id:           id,
-		murmurSeed:   rand.Uint32(),
+		hashKey:      hashKey,
 		clock:        clock,
 		epoch:        clock.Now(),
 		includeStats: includeStats,
@@ -187,17 +194,16 @@ func (s *Structure) ReportOutcome(_ context.Context, clientIdentifier []byte, ou
 // Visit the buckets belonging to the given clientIdentifier
 // Also takes the bucket lock and manages probability decay prior to calling the handler
 func (s *Structure) visitBuckets(clientIdentifier []byte, fn func(uint32, uint32, *bucket)) {
-	levelHashes := generateNHashesUsing64Bit(clientIdentifier, s.config.L, s.murmurSeed)
+	hash := sipHash24(s.hashKey[0], s.hashKey[1], clientIdentifier)
 
 	// One reading serves every level. A bucket that a concurrent visitor has
 	// already advanced past it is left alone by the comparison below.
 	// Sub saturates at about 292 years, so the subtraction cannot overflow.
 	now := s.clock.Now().Sub(s.epoch).Milliseconds()
 
-	for l := 0; l < int(s.config.L); l++ {
-		lvl := s.levels[l]
-		m := levelHashes[l] % s.config.M
-		buck := lvl[m]
+	for l := uint32(0); l < s.config.L; l++ {
+		m := levelIndex(hash, l, s.config.M)
+		buck := s.levels[l][m]
 
 		buck.mu.Lock()
 
@@ -207,32 +213,27 @@ func (s *Structure) visitBuckets(clientIdentifier []byte, fn func(uint32, uint32
 			buck.lastUpdatedTimeMillis = now
 		}
 
-		fn(uint32(l), m, buck)
+		fn(l, m, buck)
 		buck.mu.Unlock()
 	}
 }
 
-// Calculate n hashes of the given input using murmur hash.
-// To optimize, we only calculate a single 64-bit hash and use a technique outlined in
-// the paper below to compute more based on them:
-// https://www.eecs.harvard.edu/~michaelm/postscripts/rsa2008.pdf
-func generateNHashesUsing64Bit(input []byte, n uint32, seed uint32) []uint32 {
-	// Compute the 64-bit hash
-	h := murmur3.New64WithSeed(seed)
-	h.Write(input)
-	hash64 := h.Sum64()
-
-	// Split the 64-bit hash into two 32-bit hashes
-	hash1 := uint32(hash64)       // Lower 32 bits
-	hash2 := uint32(hash64 >> 32) // Upper 32 bits
-
-	// Generate the n hashes using the combination: hash_i = hash1 + i * hash2
-	hashes := make([]uint32, n)
-	for i := range hashes {
-		hashes[i] = hash1 + uint32(i)*hash2
+// newHashKey reads a 128-bit key from source, or from crypto/rand when source
+// is nil. Placement keys must stay secret, so they do not come from math/rand:
+// that generator is shared with the rest of the process and can be made to
+// repeat, by rand.Seed or by GODEBUG=randautoseed=0.
+func newHashKey(source io.Reader) ([2]uint64, error) {
+	if utils.IsNil(source) {
+		source = crand.Reader
 	}
-
-	return hashes
+	var raw [16]byte
+	if _, err := io.ReadFull(source, raw[:]); err != nil {
+		return [2]uint64{}, err
+	}
+	return [2]uint64{
+		binary.LittleEndian.Uint64(raw[:8]),
+		binary.LittleEndian.Uint64(raw[8:]),
+	}, nil
 }
 
 // AdjustProbability applies exponential decay to the given probability.

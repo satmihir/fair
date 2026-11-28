@@ -3,7 +3,6 @@ package data
 import (
 	"context"
 	"math"
-	"math/rand"
 	"sync"
 	"testing"
 	"time"
@@ -78,19 +77,6 @@ func TestNewStructure(t *testing.T) {
 
 	assert.Equal(t, len(structure.levels), 2)
 	assert.Equal(t, len(structure.levels[0]), 24)
-}
-
-func TestHashes(t *testing.T) {
-	datum := []byte("hello world")
-	hashes := generateNHashesUsing64Bit(datum, 3, 5)
-
-	assert.Equal(t, len(hashes), 3)
-
-	hashes2 := generateNHashesUsing64Bit(datum, 3, 5)
-
-	assert.Equal(t, hashes[0], hashes2[0])
-	assert.Equal(t, hashes[1], hashes2[1])
-	assert.Equal(t, hashes[2], hashes2[2])
 }
 
 func TestGetID(t *testing.T) {
@@ -276,12 +262,6 @@ func TestRegisterRequestCallsFinalProbabilityFunction(t *testing.T) {
 }
 
 func TestReportOutcomeClampsProbability(t *testing.T) {
-	// Use a fixed seed for deterministic murmur hash
-	//nolint:staticcheck // Using deprecated rand.Seed for deterministic test behavior
-	rand.Seed(1)
-	//nolint:staticcheck
-	defer rand.Seed(time.Now().UnixNano())
-
 	testCases := []struct {
 		name         string
 		initialProb  float64
@@ -354,12 +334,6 @@ func TestReportOutcomeClampsProbability(t *testing.T) {
 }
 
 func TestReportOutcomeClamping_Concurrent(t *testing.T) {
-	// Use a fixed seed for determinist ic murmur hash
-	//nolint:staticcheck // Using deprecated rand.Seed for deterministic test behavior
-	rand.Seed(1)
-	//nolint:staticcheck
-	defer rand.Seed(time.Now().UnixNano())
-
 	conf := &config.FairnessTrackerConfig{
 		L:                        1,
 		M:                        1,

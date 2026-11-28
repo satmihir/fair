@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"io"
 	"math"
 	"time"
 )
@@ -26,6 +27,14 @@ type FairnessTrackerConfig struct {
 	IncludeStats bool
 	// The function to choose the final probability from all the bucket probabilities
 	FinalProbabilityFunction FinalProbabilityFunction
+	// HashKeySource supplies the secret keys that place clients in buckets.
+	// Sixteen bytes are read for every structure a tracker builds, including
+	// one at each rotation. Leave it nil in production so that keys come from
+	// crypto/rand. A simulation or test can supply a seeded reader to make
+	// placement reproducible; it has no effect on the random draw behind each
+	// throttling decision. A reader shared by several trackers must be safe
+	// for concurrent use.
+	HashKeySource io.Reader
 }
 
 // ValidateStructure checks the parameters needed by the underlying data structure.

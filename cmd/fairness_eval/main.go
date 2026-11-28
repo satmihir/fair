@@ -276,7 +276,10 @@ func runScenarioWithVariant(
 		}
 		ticker = simticker.New()
 
-		//nolint:staticcheck // The tracker uses math/rand's package global; seed it so this experiment is reproducible.
+		// Placement keys and throttling decisions draw from separate sources;
+		// fix both so this experiment is reproducible.
+		conf.HashKeySource = rand.New(rand.NewSource(seed))
+		//nolint:staticcheck // Throttling decisions use math/rand's package global.
 		rand.Seed(seed)
 		trackerInstance, err := tracker.NewFairnessTrackerWithClockAndTicker(conf, clock, ticker)
 		if err != nil {
