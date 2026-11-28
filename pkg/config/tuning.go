@@ -4,8 +4,6 @@ import (
 	"fmt"
 	"math"
 	"time"
-
-	"github.com/satmihir/fair/v2/pkg/logger"
 )
 
 const (
@@ -38,10 +36,12 @@ var (
 	generateTunedStructureConfig = GenerateTunedStructureConfig
 
 	// MinFinalProbabilityFunction returns the smallest probability in the
-	// slice. It is the default implementation used by the tracker.
+	// slice. It is the default implementation used by the tracker. An empty
+	// slice gives 0: with no buckets there is nothing to throttle on. A
+	// tracker never passes one, because it always has at least one level.
 	MinFinalProbabilityFunction FinalProbabilityFunction = func(buckets []float64) float64 {
 		if len(buckets) == 0 {
-			logger.Fatalf("Cannot compute final probability with empty buckets slice")
+			return 0
 		}
 
 		minVal := 1.
@@ -54,10 +54,10 @@ var (
 
 	// MeanFinalProbabilityFunction returns the mean of all bucket
 	// probabilities and can be used in scenarios where the minimum value is
-	// too strict.
+	// too strict. An empty slice gives 0, as for MinFinalProbabilityFunction.
 	MeanFinalProbabilityFunction FinalProbabilityFunction = func(buckets []float64) float64 {
 		if len(buckets) == 0 {
-			logger.Fatalf("Cannot compute final probability with empty buckets slice")
+			return 0
 		}
 
 		var total float64
@@ -70,15 +70,16 @@ var (
 )
 
 // DefaultFairnessTrackerConfig returns a configuration that should work well
-// for most applications without any additional tuning.
+// for most applications without any additional tuning. It panics only if the
+// library's own default constants stop producing a valid configuration, which
+// would be a bug in the library and is covered by its tests.
 func DefaultFairnessTrackerConfig() *FairnessTrackerConfig {
 	conf, err := generateTunedStructureConfig(
 		defaultExpectedClientFlows,
 		defaultBucketsPerLevel,
 		defaultTolerableBadRequestsPerBadFlow)
 	if err != nil {
-		// This should never happen with valid defaults
-		logger.Fatalf("failed to generate default config: %v", err)
+		panic(fmt.Sprintf("fair: default configuration is invalid: %v", err))
 	}
 	return conf
 }
