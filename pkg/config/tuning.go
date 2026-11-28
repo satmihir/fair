@@ -83,16 +83,6 @@ func DefaultFairnessTrackerConfig() *FairnessTrackerConfig {
 	return conf
 }
 
-// Generates a "good enough" config to use for a structure underneath the throttler
-// which requires minimal tuning and should be able to get decent results in most
-// cases. If more tuning is desired, the clients can directly provide their own
-// config object when initializing FairWorkloadTracker.
-//
-// params:
-// -------
-// expectedClientFlows - Number of concurrent clients you expect to your app
-// bucketsPerLevel - Number of buckets per level in the core structure
-// tolerableBadRequestsPerBadFlow - Number of requests we can tolerate before we fully shut down a flow
 // GenerateTunedStructureConfig creates a configuration tuned for the expected
 // scale of your application.
 //
@@ -102,55 +92,70 @@ func DefaultFairnessTrackerConfig() *FairnessTrackerConfig {
 //   - tolerableBadRequestsPerBadFlow: number of failed requests tolerated before
 //     a flow is fully blocked.
 //
-// Returns an error if tolerableBadRequestsPerBadFlow is 0.
+// All arguments must be positive. At least two buckets per level are needed
+// to avoid certain collisions. An unrepresentable level count is an error.
 func GenerateTunedStructureConfig(expectedClientFlows, bucketsPerLevel, tolerableBadRequestsPerBadFlow uint32) (*FairnessTrackerConfig, error) {
-	// Validate tolerableBadRequestsPerBadFlow to prevent division by zero when computing Pi.
-	// We return an error instead of silently using a default value because:
-	// - Most users should use DefaultFairnessTrackerConfig() which provides sensible defaults (25 currently)
-	// - The parameter is critical: it directly computes Pi = 1 / tolerableBadRequestsPerBadFlow
-	// - A value of 0 would mean "never block flows" which is not right for a fairness tracker
-	if tolerableBadRequestsPerBadFlow <= 0 {
+	if expectedClientFlows == 0 {
+		return nil, fmt.Errorf("expectedClientFlows must be greater than 0")
+	}
+	if bucketsPerLevel < 2 {
+		return nil, fmt.Errorf("bucketsPerLevel must be at least 2")
+	}
+	if tolerableBadRequestsPerBadFlow == 0 {
 		return nil, fmt.Errorf("tolerableBadRequestsPerBadFlow must be greater than 0")
 	}
 
 	M := uint32(math.Ceil(float64(expectedClientFlows) * percentBadClientFlows))
-	L := max(CalculateL(bucketsPerLevel, M, lowProbability), minL)
+	L := CalculateL(bucketsPerLevel, M, lowProbability)
+	if L == 0 {
+		return nil, fmt.Errorf("required number of levels is not representable for %d bad flows and %d buckets per level", M, bucketsPerLevel)
+	}
 
 	// The probability to add per bad outcome so we fully block a flow after tolerable failures
 	Pi := 1 / float64(tolerableBadRequestsPerBadFlow)
 	// We want a slower recovery than the speed of marking workloads as bad
 	Pd := pdSlowingFactor * Pi
 
-	return &FairnessTrackerConfig{
+	c := &FairnessTrackerConfig{
 		M:                        bucketsPerLevel,
-		L:                        L,
+		L:                        max(L, minL),
 		Pi:                       Pi,
 		Pd:                       Pd,
 		Lambda:                   defaultDecayRate,
 		RotationFrequency:        defaultRotationDuration,
 		IncludeStats:             false,
 		FinalProbabilityFunction: MinFinalProbabilityFunction,
-	}, nil
+	}
+	if err := c.ValidateStructure(); err != nil {
+		return nil, err
+	}
+	return c, nil
 }
 
-// Get the appropriate number of levels to achieve the target collision probability:
-//
-// params:
-// -------
-// B - Buckets per level.
-// M - Expected "bad" client flows that'll need throttling.
-// p - Probability of an innocent flow colliding with a bad one. Likely a small value.
-//
-// The formula we are solving with:
-// p = (1 - (1 - (1/B))^M)^L
-// Comes from the following paper:
-// https://rtcl.eecs.umich.edu/rtclweb/assets/publications/2001/feng2001fair.pdf
-//
-// CalculateL computes the number of levels required to achieve the target
-// collision probability. Most users should call GenerateTunedStructureConfig
-// instead of invoking this directly.
+// CalculateL computes the levels needed for a collision probability at most p
+// with B buckets per level and M bad flows: (1 - (1 - 1/B)^M)^L <= p.
+// It returns 0 if B < 2, M == 0, p is not in (0, 1), or the required level
+// count cannot be represented by a uint32.
 func CalculateL(B, M uint32, p float64) uint32 {
-	term := 1 - math.Pow(1-1/float64(B), float64(M))
-	L := math.Log(p) / math.Log(term)
-	return uint32(math.Ceil(L))
+	if B < 2 || M == 0 || !(p > 0 && p < 1) {
+		return 0
+	}
+
+	// Compute log(1 - exp(x)) without losing the smaller probability to
+	// cancellation when either collisions or empty buckets are rare.
+	x := float64(M) * math.Log1p(-1/float64(B))
+	var logCollision float64
+	if x > -math.Ln2 {
+		logCollision = math.Log(-math.Expm1(x))
+	} else {
+		logCollision = math.Log1p(-math.Exp(x))
+	}
+	if logCollision == 0 {
+		return 0
+	}
+	levels := math.Ceil(math.Log(p) / logCollision)
+	if !(levels >= 1 && levels <= math.MaxUint32) {
+		return 0
+	}
+	return uint32(levels)
 }

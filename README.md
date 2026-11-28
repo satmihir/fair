@@ -164,6 +164,10 @@ if err != nil {
 defer trk.Close()
 ```
 
+Tracker construction takes a snapshot of the config, so you can reuse a builder or change the config after a successful build. A custom probability function is copied as a function value: it must still be safe to call concurrently. Do not change the config concurrently with construction.
+
+For manual configurations, use positive dimensions, `0 < Pd < Pi <= 1`, a finite nonnegative `Lambda` (zero disables decay), and a non-nil probability function. `NewFairnessTracker` also needs a positive rotation interval; a manually supplied ticker controls its own cadence. Check construction and tuning errors before using the tracker.
+
 ## Logging
 Fair provides logs present which by default are disabled.
 package `logger` exposes an interface with `GetLogger` and `SetLogger` methods.

@@ -1,11 +1,13 @@
 package tracker
 
 import (
+	"context"
 	"fmt"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/satmihir/fair/pkg/config"
 	"github.com/satmihir/fair/pkg/testutils"
@@ -30,7 +32,8 @@ func TestBuildFairnessTracker(t *testing.T) {
 	b.SetFinalProbabilityFunction(config.MeanFinalProbabilityFunction)
 
 	tr, err := b.Build()
-	assert.NoError(t, err)
+	require.NoError(t, err)
+	t.Cleanup(tr.Close)
 	assert.Equal(t, int(tr.trackerConfig.L), 10)
 	assert.Equal(t, int(tr.trackerConfig.M), 10)
 	assert.Equal(t, 1*time.Second, tr.trackerConfig.RotationFrequency,
@@ -42,7 +45,30 @@ func TestBuildWithConfig(t *testing.T) {
 	assert.NoError(t, err)
 	b := NewFairnessTrackerBuilder()
 	tr, err := b.BuildWithConfig(c)
-	assert.NoError(t, err)
+	require.NoError(t, err)
+	t.Cleanup(tr.Close)
 	assert.Equal(t, int(tr.trackerConfig.L), 4)
 	assert.Equal(t, int(tr.trackerConfig.M), 10)
+}
+
+func TestBuilderReusePreservesTrackerConfig(t *testing.T) {
+	b := NewFairnessTrackerBuilder()
+	b.SetIncludeStats(true)
+	b.SetFinalProbabilityFunction(func([]float64) float64 { return 0.25 })
+	first, err := b.Build()
+	require.NoError(t, err)
+	t.Cleanup(first.Close)
+
+	b.SetFinalProbabilityFunction(func([]float64) float64 { return 0.75 })
+	second, err := b.Build()
+	require.NoError(t, err)
+	t.Cleanup(second.Close)
+
+	ctx, id := context.Background(), []byte("client")
+	firstStats := first.RegisterRequest(ctx, id).ResultStats
+	secondStats := second.RegisterRequest(ctx, id).ResultStats
+	require.NotNil(t, firstStats)
+	require.NotNil(t, secondStats)
+	require.Equal(t, 0.25, firstStats.FinalProbability)
+	require.Equal(t, 0.75, secondStats.FinalProbability)
 }

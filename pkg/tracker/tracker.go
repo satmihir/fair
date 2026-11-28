@@ -43,29 +43,40 @@ var newTrackerStructureWithClock = func(
 
 // NewFairnessTrackerWithClockAndTicker creates a FairnessTracker using the
 // provided clock and ticker. It is primarily used for tests and simulations
-// where time needs to be controlled.
+// where time needs to be controlled. On success the tracker owns the ticker;
+// on failure the caller retains ownership.
 func NewFairnessTrackerWithClockAndTicker(trackerConfig *config.FairnessTrackerConfig, clock utils.IClock, ticker utils.ITicker) (*FairnessTracker, error) {
-	// Guard clause: fail fast and return a clear error when caller passes a nil config.
-	// Without this, the function dereferences fields on trackerConfig (e.g. trackerConfig.IncludeStats)
-	// below and will panic with "runtime error: invalid memory address or nil pointer dereference".
 	if trackerConfig == nil {
 		return nil, NewFairnessTrackerError(nil, "trackerConfig must not be nil")
 	}
-	st1, err := newTrackerStructureWithClock(trackerConfig, 1, trackerConfig.IncludeStats, clock)
+	if utils.IsNil(clock) {
+		return nil, NewFairnessTrackerError(nil, "clock must not be nil")
+	}
+	if utils.IsNil(ticker) {
+		return nil, NewFairnessTrackerError(nil, "ticker must not be nil")
+	}
+	return newFairnessTracker(*trackerConfig, clock, ticker)
+}
+
+// Take the config by value so future rotations use the same settings as the initial pair.
+func newFairnessTracker(cfg config.FairnessTrackerConfig, clock utils.IClock, ticker utils.ITicker) (*FairnessTracker, error) {
+	newStructure := newTrackerStructureWithClock
+	st1, err := newStructure(&cfg, 1, cfg.IncludeStats, clock)
 	if err != nil {
 		logger.Printf("error in creating first tracker : %v", err)
 		return nil, NewFairnessTrackerError(err, "Failed to create a structure")
 	}
 
-	st2, err := newTrackerStructureWithClock(trackerConfig, 2, trackerConfig.IncludeStats, clock)
+	st2, err := newStructure(&cfg, 2, cfg.IncludeStats, clock)
 	if err != nil {
+		st1.Close()
 		logger.Printf("error in creating second tracker : %v", err)
 		return nil, NewFairnessTrackerError(err, "Failed to create a structure")
 	}
 
 	stopRotation := make(chan struct{})
 	ft := &FairnessTracker{
-		trackerConfig:      trackerConfig,
+		trackerConfig:      &cfg,
 		structureIDCounter: 3,
 
 		mainStructure:      st1,
@@ -86,7 +97,7 @@ func NewFairnessTrackerWithClockAndTicker(trackerConfig *config.FairnessTrackerC
 			case <-stopRotation:
 				return
 			case <-ticker.C():
-				s, err := newTrackerStructureWithClock(trackerConfig, ft.structureIDCounter, trackerConfig.IncludeStats, clock)
+				s, err := newStructure(&cfg, ft.structureIDCounter, cfg.IncludeStats, clock)
 				if err != nil {
 					logger.Fatalf("failed to create a structure during rotation: %v", err)
 					return
@@ -109,9 +120,20 @@ func NewFairnessTracker(trackerConfig *config.FairnessTrackerConfig) (*FairnessT
 	if trackerConfig == nil {
 		return nil, NewFairnessTrackerError(nil, "Configuration cannot be nil")
 	}
-	clk := utils.NewRealClock()
-	ticker := utils.NewRealTicker(trackerConfig.RotationFrequency)
-	return NewFairnessTrackerWithClockAndTicker(trackerConfig, clk, ticker)
+	cfg := *trackerConfig
+	if cfg.RotationFrequency <= 0 {
+		return nil, NewFairnessTrackerError(nil, "rotation frequency must be positive")
+	}
+	if err := cfg.ValidateStructure(); err != nil {
+		return nil, NewFairnessTrackerError(err, "invalid tracker configuration")
+	}
+	ticker := utils.NewRealTicker(cfg.RotationFrequency)
+	ft, err := newFairnessTracker(cfg, utils.NewRealClock(), ticker)
+	if err != nil {
+		ticker.Stop()
+		return nil, err
+	}
+	return ft, nil
 }
 
 // RegisterRequest records an incoming request and returns whether it should be
