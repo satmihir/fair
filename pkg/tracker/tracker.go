@@ -28,8 +28,25 @@ type FairnessTracker struct {
 	// Rotation lock to ensure that we don't rotate while updating the structures
 	// The act of updating is a "read" in this case since multiple updates can happen
 	// concurrently, but none can happen while we are rotating so that's a write.
-	rotationLock sync.RWMutex
-	stopRotation chan struct{}
+	rotationLock   sync.RWMutex
+	rotationStatus RotationStatus // protected by rotationLock
+	stopRotation   chan struct{}
+}
+
+// RotationStatus describes background rotation attempts for one tracker.
+// The initial construction is not counted as a rotation attempt.
+type RotationStatus struct {
+	// Failures counts failed attempts over the lifetime of the tracker.
+	Failures uint64
+	// LastError is the most recent rotation error, cleared on successful rotation.
+	LastError error
+}
+
+// RotationStatus returns a consistent snapshot, even when logging is disabled.
+func (ft *FairnessTracker) RotationStatus() RotationStatus {
+	ft.rotationLock.RLock()
+	defer ft.rotationLock.RUnlock()
+	return ft.rotationStatus
 }
 
 var newTrackerStructureWithClock = func(
@@ -99,14 +116,19 @@ func newFairnessTracker(cfg config.FairnessTrackerConfig, clock utils.IClock, ti
 			case <-ticker.C():
 				s, err := newStructure(&cfg, ft.structureIDCounter, cfg.IncludeStats, clock)
 				if err != nil {
-					logger.Fatalf("failed to create a structure during rotation: %v", err)
-					return
+					ft.rotationLock.Lock()
+					ft.rotationStatus.Failures++
+					ft.rotationStatus.LastError = err
+					ft.rotationLock.Unlock()
+					logger.Printf("rotation failed; retaining current structures until the next tick: %v", err)
+					continue
 				}
 				ft.structureIDCounter++
 
 				ft.rotationLock.Lock()
 				ft.mainStructure = ft.secondaryStructure
 				ft.secondaryStructure = s
+				ft.rotationStatus.LastError = nil
 				ft.rotationLock.Unlock()
 			}
 		}
