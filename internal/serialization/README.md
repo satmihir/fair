@@ -16,10 +16,9 @@ Use the project Makefile from the root directory:
 ```bash
 # Generate Protocol Buffer code
 make proto
-
-# Or build everything (includes proto generation)
-make all
 ```
+
+`make build`, `make test` and `make all` use the checked-in `v1.pb.go` and do not regenerate it. Run `make proto` only after changing `v1.proto`, with protoc 3.20.3 and protoc-gen-go v1.36.10: CI compares the checked-in file byte for byte, and other versions produce different output, starting with the version header.
 
 ### Manual Setup (Optional)
 
@@ -31,13 +30,15 @@ If you prefer to generate proto files manually:
 # Install Protocol Buffer compiler
 # See installation guide: https://protobuf.dev/downloads/
 # 
+# CI pins protoc 3.20.3. A package manager usually installs a newer release,
+# whose output differs in the version header and fails the CI check.
 # Quick install options:
 # - macOS: brew install protobuf
 # - Ubuntu/Debian: apt install protobuf-compiler
 # - Windows: Download from releases or use chocolatey: choco install protoc
 
-# Install the Go Protocol Buffer plugin
-go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
+# Install the Go Protocol Buffer plugin at the version CI pins
+go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.36.10
 
 # Verify installation
 protoc --version

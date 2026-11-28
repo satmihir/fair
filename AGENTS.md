@@ -40,7 +40,7 @@ You must use the following commands to build, test, and verify your work.
 - **Generate Protobufs**: `make proto`
     - Run this with protoc 3.20.3 and protoc-gen-go v1.36.10 if you modify `internal/serialization/v1.proto`. On Linux x86_64, `bash .github/scripts/verify-proto.sh` reproduces CI's pinned, byte-for-byte check without modifying the source tree.
 - **Build**: `make build`
-    - Compiles the project.
+    - Compiles the project. Neither this nor `make test` regenerates protobuf code.
 - **Test**: `make test`
     - Runs unit tests (`go test -v ./...`) and linting (`golangci-lint run`).
     - **Always run this before submitting changes.**

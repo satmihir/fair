@@ -34,6 +34,8 @@ Version 2 hardens the library for production use. It changes the module path, a 
 - **Outcomes.** `ReportOutcome` ignores a value other than `OutcomeSuccess` or `OutcomeFailure`. It used to count as a failure.
 - **Custom probability functions.** The result is clamped to `[0, 1]`, and NaN falls back to the smallest bucket probability. NaN used to disable throttling.
 - **Rotation.** A failed rotation keeps the current structures serving and is retried on the next tick; in v1 it ended the process with `log.Fatalf`. `Close` waits for the rotation worker and is safe to call more than once.
+- **No process exit.** The library never ends the process. In v1 the built-in probability functions called `log.Fatalf` on an empty slice; they now return 0. `DefaultFairnessTrackerConfig` panics only if the library's own defaults are invalid.
+- **Retired structures.** Rotation closes the structure it retires once no request can be using it.
 - **Request cost.** `RegisterRequest` reads only the active structure, and neither it nor `ReportOutcome` allocates a hasher per call.
 
 ### Added
@@ -43,10 +45,12 @@ Version 2 hardens the library for production use. It changes the module path, a 
 - `FairnessTracker.RotationStatus` reports rotation attempts and the last error.
 - `config.FairnessTrackerConfig.HashKeySource` and `DecisionSource`, with matching builder setters, make simulations reproducible. Leave both nil in production.
 - `config.FairnessTrackerConfig.ValidateStructure` and `config.MaxRotationBytes`.
-- The `logger` package: logging is off by default and `logger.SetLogger` turns it on.
+- The `logger` package: logging is off by default and `logger.SetLogger` turns it on. Its `Logger` interface has three print methods and no fatal method.
 
 ### Removed
 
+- `pkg/testutils` is no longer public. It holds helpers for this module's own tests and now lives under `internal/`.
+- The module root is no longer a `main` package. The lint runner that lived there is `cmd/tasks`.
 - The protobuf serialization package is no longer public. It was never part of a tagged release, is not wired to the tracker, and now lives under `internal/`.
 - The dependency on `github.com/spaolacci/murmur3`.
 
