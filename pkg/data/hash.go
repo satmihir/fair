@@ -67,11 +67,17 @@ func sipRound(v0, v1, v2, v3 uint64) (uint64, uint64, uint64, uint64) {
 // levelIndex picks the bucket for one level from a client's 64-bit hash.
 //
 // Each level remixes the hash with the SplitMix64 output function, stepping
-// by its odd "golden gamma" constant, so the indexes behave like independent
-// draws. Deriving them linearly instead (index = h1 + level*h2) leaves only
+// by its odd "golden gamma" constant. Two clients with different hashes then
+// agree at every level only about as often as unrelated draws would, roughly
+// 1/M^L. The levels are not independent hashes, though: all of them come from
+// this one 64-bit value, so two identifiers with the same hash agree at every
+// level, which for an ideal 64-bit hash happens for one pair in 2^64. That
+// floor is what bounds the shared-row rate once M^L exceeds 2^64.
+//
+// Deriving the indexes linearly instead (index = h1 + level*h2) leaves only
 // two degrees of freedom: two clients that agree on h1 and h2 modulo the
-// level width then share a bucket at every level, at a rate near 1/M^2 no
-// matter how many levels are configured.
+// level width share a bucket at every level, at a rate near 1/M^2 no matter
+// how many levels are configured.
 func levelIndex(hash uint64, level, buckets uint32) uint32 {
 	z := hash + (uint64(level)+1)*0x9e3779b97f4a7c15
 	z = (z ^ (z >> 30)) * 0xbf58476d1ce4e5b9

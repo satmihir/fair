@@ -3,7 +3,6 @@ package data
 import (
 	"context"
 	"math"
-	"math/rand"
 	"sync"
 	"testing"
 	"time"
@@ -263,12 +262,6 @@ func TestRegisterRequestCallsFinalProbabilityFunction(t *testing.T) {
 }
 
 func TestReportOutcomeClampsProbability(t *testing.T) {
-	// Use a fixed seed for a deterministic hash key
-	//nolint:staticcheck // Using deprecated rand.Seed for deterministic test behavior
-	rand.Seed(1)
-	//nolint:staticcheck
-	defer rand.Seed(time.Now().UnixNano())
-
 	testCases := []struct {
 		name         string
 		initialProb  float64
@@ -341,12 +334,6 @@ func TestReportOutcomeClampsProbability(t *testing.T) {
 }
 
 func TestReportOutcomeClamping_Concurrent(t *testing.T) {
-	// Use a fixed seed for a deterministic hash key
-	//nolint:staticcheck // Using deprecated rand.Seed for deterministic test behavior
-	rand.Seed(1)
-	//nolint:staticcheck
-	defer rand.Seed(time.Now().UnixNano())
-
 	conf := &config.FairnessTrackerConfig{
 		L:                        1,
 		M:                        1,

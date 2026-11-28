@@ -2,6 +2,9 @@ package data
 
 import (
 	"context"
+	crand "crypto/rand"
+	"encoding/binary"
+	"io"
 	"math"
 	"math/rand"
 	"sync"
@@ -66,6 +69,11 @@ func NewStructureWithClock(input *config.FairnessTrackerConfig, id uint64, inclu
 		return nil, NewDataError(nil, "clock cannot be nil")
 	}
 
+	hashKey, err := newHashKey(cfg.HashKeySource)
+	if err != nil {
+		return nil, NewDataError(err, "failed to generate a hash key")
+	}
+
 	levels := make([][]*bucket, cfg.L)
 	for i := range levels {
 		levels[i] = make([]*bucket, cfg.M)
@@ -79,7 +87,7 @@ func NewStructureWithClock(input *config.FairnessTrackerConfig, id uint64, inclu
 		levels:       levels,
 		config:       cfg,
 		id:           id,
-		hashKey:      newHashKey(),
+		hashKey:      hashKey,
 		clock:        clock,
 		epoch:        clock.Now(),
 		includeStats: includeStats,
@@ -210,14 +218,22 @@ func (s *Structure) visitBuckets(clientIdentifier []byte, fn func(uint32, uint32
 	}
 }
 
-// newHashKey draws a 128-bit key from math/rand's package-level generator,
-// the same source the throttling decision uses. Unless the process calls the
-// deprecated rand.Seed, that generator is seeded from the operating system and
-// is not predictable from its output (ChaCha8 since Go 1.22). A process that
-// does call rand.Seed makes the keys reproducible, which simulations rely on
-// and production services should avoid.
-func newHashKey() [2]uint64 {
-	return [2]uint64{rand.Uint64(), rand.Uint64()}
+// newHashKey reads a 128-bit key from source, or from crypto/rand when source
+// is nil. Placement keys must stay secret, so they do not come from math/rand:
+// that generator is shared with the rest of the process and can be made to
+// repeat, by rand.Seed or by GODEBUG=randautoseed=0.
+func newHashKey(source io.Reader) ([2]uint64, error) {
+	if utils.IsNil(source) {
+		source = crand.Reader
+	}
+	var raw [16]byte
+	if _, err := io.ReadFull(source, raw[:]); err != nil {
+		return [2]uint64{}, err
+	}
+	return [2]uint64{
+		binary.LittleEndian.Uint64(raw[:8]),
+		binary.LittleEndian.Uint64(raw[8:]),
+	}, nil
 }
 
 // AdjustProbability applies exponential decay to the given probability.
