@@ -4,6 +4,7 @@ import "context"
 
 // Outcome represents the result of a request for resource allocation.
 // It is used to adjust throttling probabilities for future requests.
+// Reporting a value other than the constants below changes nothing.
 type Outcome int
 
 const (

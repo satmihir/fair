@@ -38,6 +38,9 @@ type FairnessTracker struct {
 	stopRotation   chan struct{}
 	rotationDone   chan struct{}
 	closeOnce      sync.Once
+
+	// Logs the first unknown outcome only, so a caller bug cannot flood the log.
+	unknownOutcome sync.Once
 }
 
 // RotationStatus describes background rotation attempts for one tracker.
@@ -188,12 +191,10 @@ func (ft *FairnessTracker) RegisterRequest(ctx context.Context, clientIdentifier
 	ft.rotationLock.RLock()
 	defer ft.rotationLock.RUnlock()
 
-	resp := ft.mainStructure.RegisterRequest(ctx, clientIdentifier)
-
-	// To keep the bad workloads data "warm" in the rotated structure, we will update both
-	ft.secondaryStructure.RegisterRequest(ctx, clientIdentifier)
-
-	return resp
+	// Only the active structure decides. The standby stays warm through
+	// ReportOutcome; a read there would only apply decay, which each bucket
+	// catches up on by itself the next time it is visited.
+	return ft.mainStructure.RegisterRequest(ctx, clientIdentifier)
 }
 
 func (ft *FairnessTracker) outcomeLock(clientIdentifier []byte) *sync.Mutex {
@@ -203,7 +204,15 @@ func (ft *FairnessTracker) outcomeLock(clientIdentifier []byte) *sync.Mutex {
 // ReportOutcome applies an outcome to the active and standby structures. For
 // the same client, overlapping reports may run in either order, but both
 // structures see the same order. Rotation never splits a single report.
+// An outcome other than OutcomeSuccess or OutcomeFailure is ignored.
 func (ft *FairnessTracker) ReportOutcome(ctx context.Context, clientIdentifier []byte, outcome request.Outcome) *request.ReportOutcomeResult {
+	if outcome != request.OutcomeSuccess && outcome != request.OutcomeFailure {
+		ft.unknownOutcome.Do(func() {
+			logger.Printf("ignoring unknown outcome %d; further occurrences are not logged", outcome)
+		})
+		return &request.ReportOutcomeResult{}
+	}
+
 	// Wait for this client's turn before pinning a generation pair.
 	mu := ft.outcomeLock(clientIdentifier)
 	mu.Lock()

@@ -5,10 +5,12 @@ import (
 	"math"
 	"math/rand"
 	"sync"
+	"time"
 
 	"github.com/spaolacci/murmur3"
 
 	"github.com/satmihir/fair/pkg/config"
+	"github.com/satmihir/fair/pkg/logger"
 	"github.com/satmihir/fair/pkg/request"
 	"github.com/satmihir/fair/pkg/utils"
 )
@@ -17,17 +19,11 @@ import (
 type bucket struct {
 	// Probability that a request falling on this bucket should be dropped
 	probability float64
-	// Latest Unix millisecond used for decay; never moves backward.
+	// Latest time used for decay, in milliseconds since the structure's
+	// epoch; never moves backward.
 	lastUpdatedTimeMillis int64
 	// Mutex protects the state of this bucket from concurrent access
 	mu sync.Mutex
-}
-
-func newBucket(clock utils.IClock) *bucket {
-	return &bucket{
-		probability:           0,
-		lastUpdatedTimeMillis: clock.Now().UnixMilli(),
-	}
 }
 
 // Structure implements the Tracker interface using a multi-level Bloom filter
@@ -46,6 +42,13 @@ type Structure struct {
 	murmurSeed uint32
 	// The clock to use for getting the time
 	clock utils.IClock
+	// Construction time. Decay measures elapsed time from here with Time.Sub,
+	// which uses the monotonic reading when the clock supplies one, so a
+	// wall-clock step (NTP correction, manual change) is not mistaken for
+	// elapsed time.
+	epoch time.Time
+	// Logs the first unusable final probability only.
+	badProbability sync.Once
 	// Includes stats in results. Useful for debugging but may slightly affect performance.
 	includeStats bool
 }
@@ -69,7 +72,7 @@ func NewStructureWithClock(input *config.FairnessTrackerConfig, id uint64, inclu
 		levels[i] = make([]*bucket, cfg.M)
 
 		for j := range levels[i] {
-			levels[i][j] = newBucket(clock)
+			levels[i][j] = &bucket{}
 		}
 	}
 
@@ -79,6 +82,7 @@ func NewStructureWithClock(input *config.FairnessTrackerConfig, id uint64, inclu
 		id:           id,
 		murmurSeed:   rand.Uint32(),
 		clock:        clock,
+		epoch:        clock.Now(),
 		includeStats: includeStats,
 	}, nil
 }
@@ -117,7 +121,7 @@ func (s *Structure) RegisterRequest(_ context.Context, clientIdentifier []byte) 
 		}
 	})
 
-	pFinal := s.config.FinalProbabilityFunction(bucketProbabilities)
+	pFinal := s.finalProbability(bucketProbabilities)
 
 	if s.includeStats {
 		stats.BucketProbabilities = bucketProbabilities
@@ -133,12 +137,38 @@ func (s *Structure) RegisterRequest(_ context.Context, clientIdentifier []byte) 
 	}
 }
 
+// finalProbability keeps a custom FinalProbabilityFunction from silently
+// switching throttling off or reporting an impossible probability: results
+// outside [0, 1] are clamped, and NaN falls back to the smallest bucket
+// probability (the default function).
+func (s *Structure) finalProbability(bucketProbabilities []float64) float64 {
+	p := s.config.FinalProbabilityFunction(bucketProbabilities)
+	switch {
+	case math.IsNaN(p):
+		s.badProbability.Do(func() {
+			logger.Printf("FinalProbabilityFunction returned NaN; using the minimum bucket probability instead (structure %d, further occurrences are not logged)", s.id)
+		})
+		return config.MinFinalProbabilityFunction(bucketProbabilities)
+	case p < 0:
+		return 0
+	case p > 1:
+		return 1
+	}
+	return p
+}
+
 // ReportOutcome updates the probabilities for the buckets associated with the
-// given client identifier based on the observed outcome.
+// given client identifier based on the observed outcome. An outcome other than
+// OutcomeSuccess or OutcomeFailure is ignored.
 func (s *Structure) ReportOutcome(_ context.Context, clientIdentifier []byte, outcome request.Outcome) *request.ReportOutcomeResult {
-	adjustment := s.config.Pi
-	if outcome == request.OutcomeSuccess {
+	var adjustment float64
+	switch outcome {
+	case request.OutcomeSuccess:
 		adjustment = -s.config.Pd
+	case request.OutcomeFailure:
+		adjustment = s.config.Pi
+	default:
+		return &request.ReportOutcomeResult{}
 	}
 
 	s.visitBuckets(clientIdentifier, func(_ uint32, _ uint32, b *bucket) {
@@ -153,6 +183,11 @@ func (s *Structure) ReportOutcome(_ context.Context, clientIdentifier []byte, ou
 func (s *Structure) visitBuckets(clientIdentifier []byte, fn func(uint32, uint32, *bucket)) {
 	levelHashes := generateNHashesUsing64Bit(clientIdentifier, s.config.L, s.murmurSeed)
 
+	// One reading serves every level. A bucket that a concurrent visitor has
+	// already advanced past it is left alone by the comparison below.
+	// Sub saturates at about 292 years, so the subtraction cannot overflow.
+	now := s.clock.Now().Sub(s.epoch).Milliseconds()
+
 	for l := 0; l < int(s.config.L); l++ {
 		lvl := s.levels[l]
 		m := levelHashes[l] % s.config.M
@@ -160,9 +195,8 @@ func (s *Structure) visitBuckets(clientIdentifier []byte, fn func(uint32, uint32
 
 		buck.mu.Lock()
 
-		if now := s.clock.Now().UnixMilli(); now > buck.lastUpdatedTimeMillis {
-			// Compare signed timestamps first; their positive difference fits in uint64.
-			elapsed := uint64(now) - uint64(buck.lastUpdatedTimeMillis)
+		if now > buck.lastUpdatedTimeMillis {
+			elapsed := uint64(now - buck.lastUpdatedTimeMillis)
 			buck.probability = adjustProbability(buck.probability, s.config.Lambda, elapsed)
 			buck.lastUpdatedTimeMillis = now
 		}

@@ -43,8 +43,8 @@ Headline results with the default FAIR configuration:
 
 | Scenario | No FAIR Jain | FAIR Jain | Improvement | Utilization with FAIR |
 | --- | ---: | ---: | ---: | ---: |
-| API noisy neighbors | 0.2184 | 0.6673 | +205.5% | 99.97% |
-| Batch surge | 0.7497 | 0.9944 | +32.6% | 89.39% |
+| API noisy neighbors | 0.2184 | 0.6599 | +202.2% | 99.95% |
+| Batch surge | 0.7497 | 0.9964 | +32.9% | 89.26% |
 
 For the API noisy-neighbor workload, a focused FAIR configuration sweep found materially higher fairness. The strongest practical point in the sweep used `MinFinalProbabilityFunction`, `tolerableBadRequestsPerBadFlow=60`, `Lambda=0`, and at least 1,500 buckets per level, reaching a Jain score of 0.8498 with 99.28% utilization. That is a +289.1% improvement over no FAIR and about +27.3% over the default FAIR configuration for this workload.
 
@@ -76,7 +76,7 @@ Follow `ExampleFairnessTracker` in the [example source](pkg/tracker/example_test
 
 1. Build one tracker for the shared resource at startup. `NewFairnessTrackerBuilder` starts with defaults; apply any setters before `Build`. Check the build error before using the tracker, and close it at shutdown.
 2. Before attempting to acquire the resource, call `RegisterRequest` with a stable flow ID (for example, a tenant ID). If `ShouldThrottle` is true, reject the request immediately. FAIR makes the decision; your application enforces it. No resource was attempted, so do not report an outcome.
-3. Otherwise, try to acquire the resource. With the same flow ID, report `request.OutcomeSuccess` if you obtained it or `request.OutcomeFailure` if a shortage prevented acquisition. A validation error or network timeout by itself establishes neither: report nothing.
+3. Otherwise, try to acquire the resource. With the same flow ID, report `request.OutcomeSuccess` if you obtained it or `request.OutcomeFailure` if a shortage prevented acquisition. A validation error or network timeout by itself establishes neither: report nothing. Any other outcome value is ignored.
 
 ### Inspecting stats
 
@@ -103,7 +103,7 @@ if err != nil {
 defer trk.Close()
 ```
 
-Tracker construction takes a snapshot of the config, so you can reuse a builder or change the config after a successful build. A custom probability function is copied as a function value: it must still be safe to call concurrently. Do not change the config concurrently with construction.
+Tracker construction takes a snapshot of the config, so you can reuse a builder or change the config after a successful build. A custom probability function is copied as a function value: it must still be safe to call concurrently. Its result is clamped to `[0, 1]`; if it returns NaN, the tracker uses the smallest bucket probability for that decision and logs the first occurrence. Do not change the config concurrently with construction.
 
 For manual configurations, use positive dimensions, `0 < Pd < Pi <= 1`, a finite nonnegative `Lambda` (zero disables decay), and a non-nil probability function. `NewFairnessTracker` also needs a positive rotation interval; a manually supplied ticker controls its own cadence. Check construction and tuning errors before using the tracker.
 
