@@ -5,7 +5,7 @@ import (
 	"math"
 	"testing"
 
-	"github.com/satmihir/fair/pkg/logger"
+	"github.com/satmihir/fair/v2/pkg/logger"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

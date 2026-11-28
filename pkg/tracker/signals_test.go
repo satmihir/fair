@@ -11,8 +11,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/satmihir/fair/pkg/config"
-	"github.com/satmihir/fair/pkg/request"
+	"github.com/satmihir/fair/v2/pkg/config"
+	"github.com/satmihir/fair/v2/pkg/request"
 )
 
 func signalsTracker(t *testing.T, mutate func(*config.FairnessTrackerConfig)) (*FairnessTracker, *manualClock, *fakeTicker) {

@@ -10,10 +10,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/satmihir/fair/pkg/config"
-	"github.com/satmihir/fair/pkg/logger"
-	"github.com/satmihir/fair/pkg/request"
-	"github.com/satmihir/fair/pkg/utils"
+	"github.com/satmihir/fair/v2/pkg/config"
+	"github.com/satmihir/fair/v2/pkg/logger"
+	"github.com/satmihir/fair/v2/pkg/request"
+	"github.com/satmihir/fair/v2/pkg/utils"
 )
 
 // Represents a bucket in the leveled structure

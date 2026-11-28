@@ -5,7 +5,7 @@ import (
 	"math"
 	"time"
 
-	"github.com/satmihir/fair/pkg/logger"
+	"github.com/satmihir/fair/v2/pkg/logger"
 )
 
 const (

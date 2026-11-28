@@ -9,7 +9,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/satmihir/fair/pkg/request"
+	"github.com/satmihir/fair/v2/pkg/request"
 )
 
 func TestReportOutcomeIgnoresUnknownOutcome(t *testing.T) {

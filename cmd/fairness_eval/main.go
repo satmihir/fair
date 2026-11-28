@@ -10,10 +10,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/satmihir/fair/internal/simticker"
-	"github.com/satmihir/fair/pkg/config"
-	"github.com/satmihir/fair/pkg/request"
-	"github.com/satmihir/fair/pkg/tracker"
+	"github.com/satmihir/fair/v2/internal/simticker"
+	"github.com/satmihir/fair/v2/pkg/config"
+	"github.com/satmihir/fair/v2/pkg/request"
+	"github.com/satmihir/fair/v2/pkg/tracker"
 )
 
 const (

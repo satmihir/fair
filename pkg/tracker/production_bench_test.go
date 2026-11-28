@@ -11,9 +11,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/satmihir/fair/pkg/config"
-	"github.com/satmihir/fair/pkg/request"
-	"github.com/satmihir/fair/pkg/tracker"
+	"github.com/satmihir/fair/v2/pkg/config"
+	"github.com/satmihir/fair/v2/pkg/request"
+	"github.com/satmihir/fair/v2/pkg/tracker"
 )
 
 // BenchmarkProduction measures a fixed amount of API work per iteration,

@@ -6,11 +6,11 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/satmihir/fair/pkg/config"
-	"github.com/satmihir/fair/pkg/data"
-	"github.com/satmihir/fair/pkg/logger"
-	"github.com/satmihir/fair/pkg/request"
-	"github.com/satmihir/fair/pkg/utils"
+	"github.com/satmihir/fair/v2/pkg/config"
+	"github.com/satmihir/fair/v2/pkg/data"
+	"github.com/satmihir/fair/v2/pkg/logger"
+	"github.com/satmihir/fair/v2/pkg/request"
+	"github.com/satmihir/fair/v2/pkg/utils"
 )
 
 // FairnessTracker is the main entry point for applications. It keeps track of

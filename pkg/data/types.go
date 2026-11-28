@@ -1,7 +1,7 @@
 package data
 
 import (
-	"github.com/satmihir/fair/pkg/utils"
+	"github.com/satmihir/fair/v2/pkg/utils"
 )
 
 // DataError represents an error related to the underlying data structure used by

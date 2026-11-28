@@ -18,7 +18,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/satmihir/fair/pkg/config"
+	"github.com/satmihir/fair/v2/pkg/config"
 )
 
 // Vectors from the SipHash reference implementation: the key is bytes

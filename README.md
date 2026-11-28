@@ -1,6 +1,6 @@
 # FAIR
 [![Go Report Card](https://goreportcard.com/badge/github.com/satmihir/fair)](https://goreportcard.com/report/github.com/satmihir/fair)
-[![GoDoc](https://godoc.org/github.com/satmihir/fair?status.svg)](https://godoc.org/github.com/satmihir/fair)
+[![Go Reference](https://pkg.go.dev/badge/github.com/satmihir/fair/v2.svg)](https://pkg.go.dev/github.com/satmihir/fair/v2)
 
 FAIR is a Go library designed to ensure fairness in resource‑constrained environments. It helps distribute limited resources evenly across multiple clients, preventing over‑allocation and starvation.
 
@@ -57,8 +57,10 @@ The [multi-seed fairness gate](cmd/fairness_eval/README.md) checks equal-client 
 To install the FAIR library, use `go get`:
 
 ```bash
-go get github.com/satmihir/fair/pkg/tracker
+go get github.com/satmihir/fair/v2/pkg/tracker
 ```
+
+This is version 2 of the module, so the import path ends in `/v2`. It needs Go 1.26 or newer. If you are moving from v1, see [CHANGELOG.md](CHANGELOG.md) for what changed and how to update your code.
 
 ## Quick Start
 
@@ -135,7 +137,7 @@ package `logger` exposes an interface with `GetLogger` and `SetLogger` methods.
 It also provides an out of the box logger based on std lib. Here's how you can enable it:
 ```go
 import (
-	"github.com/satmihir/fair/pkg/logger"
+	"github.com/satmihir/fair/v2/pkg/logger"
 )
 logger.SetLogger(logger.NewStdLogger())
 ```

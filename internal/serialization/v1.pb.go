@@ -685,7 +685,7 @@ const file_v1_proto_rawDesc = "" +
 	"\x1cLEVEL_SQUASHING_FUNCTION_MIN\x10\x00\x12!\n" +
 	"\x1dLEVEL_SQUASHING_FUNCTION_MEAN\x10\x01*\x1e\n" +
 	"\tAlgorithm\x12\x11\n" +
-	"\rMURMURHASH_32\x10\x00B1Z/github.com/satmihir/fair/internal/serializationb\x06proto3"
+	"\rMURMURHASH_32\x10\x00B4Z2github.com/satmihir/fair/v2/internal/serializationb\x06proto3"
 
 var (
 	file_v1_proto_rawDescOnce sync.Once

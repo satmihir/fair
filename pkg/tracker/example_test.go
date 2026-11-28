@@ -5,8 +5,8 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/satmihir/fair/pkg/request"
-	"github.com/satmihir/fair/pkg/tracker"
+	"github.com/satmihir/fair/v2/pkg/request"
+	"github.com/satmihir/fair/v2/pkg/tracker"
 )
 
 func ExampleFairnessTracker() {

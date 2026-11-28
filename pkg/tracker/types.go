@@ -4,8 +4,8 @@ import (
 	"io"
 	"time"
 
-	"github.com/satmihir/fair/pkg/config"
-	"github.com/satmihir/fair/pkg/utils"
+	"github.com/satmihir/fair/v2/pkg/config"
+	"github.com/satmihir/fair/v2/pkg/utils"
 )
 
 // FairnessTrackerBuilder helps configure and construct a FairnessTracker.
