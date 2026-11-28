@@ -63,6 +63,9 @@ type Tracker interface {
 	// You don't have to report an outcome to every registered request.
 	ReportOutcome(ctx context.Context, clientIdentifier []byte, outcome Outcome) *ReportOutcomeResult
 
-	// Close this tracker when shutting down
+	// Close releases the structure's resources. The fairness tracker calls it
+	// once, after a rotation has retired the structure and no request can
+	// still be using it. The pair that is live when the fairness tracker
+	// itself is closed is not closed, because requests stay valid after that.
 	Close()
 }
