@@ -2,6 +2,8 @@ name: Go
 
 on:
   pull_request: {} # Includes PRs targeting an intermediate branch in a stack.
+  schedule:
+    - cron: '17 6 * * 1' # Weekly, so a newly published vulnerability is caught without a push.
   push:
     branches: [main, 'p1/**', 'hardening/**', 'stack/**']
     tags: ['**']
@@ -18,7 +20,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
         with:
-          go-version: '1.22.12'
+          go-version: '1.27.4' # Latest release; go.mod names the oldest supported one.
           cache: false
       - name: Build
         run: go build -mod=readonly ./...
@@ -29,10 +31,32 @@ jobs:
       - name: Rotation conformance (reference and negative control)
         run: python3 conformance/test_reference.py
       - name: Lint
-        uses: golangci/golangci-lint-action@55c2c1448f86e01eaae002a5a3a9624417608d84 # v6.5.2
+        uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
         with:
-          version: v1.61.0
+          version: v2.15.0
           args: --timeout=5m
           skip-cache: true
+      - name: Vulnerability scan
+        # Fails on a known vulnerability the code can reach, in a dependency
+        # or in this job's Go release. A failure that names the standard
+        # library is fixed by moving the Go versions in this file forward.
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.10.0 ./...
       - name: Verify checked-in protobuf code
         run: bash .github/scripts/verify-proto.sh
+
+  # The module must keep working on the oldest Go release that still receives
+  # security fixes, which is the version go.mod declares.
+  oldest-supported-go:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
+        with:
+          go-version: '1.26.11'
+          cache: false
+      - name: Build
+        run: go build -mod=readonly ./...
+      - name: Test with the race detector
+        run: go test -mod=readonly -count=1 -race ./...

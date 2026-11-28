@@ -1,6 +1,6 @@
 # FAIR
 [![Go Report Card](https://goreportcard.com/badge/github.com/satmihir/fair)](https://goreportcard.com/report/github.com/satmihir/fair)
-[![GoDoc](https://godoc.org/github.com/satmihir/fair?status.svg)](https://godoc.org/github.com/satmihir/fair)
+[![Go Reference](https://pkg.go.dev/badge/github.com/satmihir/fair/v2.svg)](https://pkg.go.dev/github.com/satmihir/fair/v2)
 
 FAIR is a Go library designed to ensure fairness in resource‑constrained environments. It helps distribute limited resources evenly across multiple clients, preventing over‑allocation and starvation.
 
@@ -43,10 +43,8 @@ Headline results with the default FAIR configuration:
 
 | Scenario | No FAIR Jain | FAIR Jain | Improvement | Utilization with FAIR |
 | --- | ---: | ---: | ---: | ---: |
-| API noisy neighbors | 0.2184 | 0.6621 | +203.2% | 99.97% |
-| Batch surge | 0.7497 | 0.9970 | +33.0% | 89.34% |
-
-For the API noisy-neighbor workload, a focused FAIR configuration sweep found materially higher fairness. The figures in this paragraph are historical: they come from an earlier run of the sweep and have not been regenerated, so do not compare them with the table above. In that run the strongest practical point used `MinFinalProbabilityFunction`, `tolerableBadRequestsPerBadFlow=60`, `Lambda=0`, and at least 1,500 buckets per level, reaching a Jain score of 0.8498 with 99.28% utilization, a +289.1% improvement over no FAIR.
+| API noisy neighbors | 0.2184 | 0.6687 | +206.2% | 99.96% |
+| Batch surge | 0.7497 | 0.9969 | +33.0% | 89.36% |
 
 [![FAIR noisy-neighbor visual demo](demo/fairness_visual/fair-demo-thumbnail.png)](demo/fairness_visual/fair-demo.mp4)
 
@@ -59,8 +57,10 @@ The [multi-seed fairness gate](cmd/fairness_eval/README.md) checks equal-client 
 To install the FAIR library, use `go get`:
 
 ```bash
-go get github.com/satmihir/fair/pkg/tracker
+go get github.com/satmihir/fair/v2/pkg/tracker
 ```
+
+This is version 2 of the module, so the import path ends in `/v2`. It needs Go 1.26 or newer. If you are moving from v1, see [CHANGELOG.md](CHANGELOG.md) for what changed and how to update your code.
 
 ## Quick Start
 
@@ -94,9 +94,7 @@ conf, err := config.GenerateTunedStructureConfig(1000, 1000, 25)
 if err != nil {
     log.Fatal(err)
 }
-trkB := tracker.NewFairnessTrackerBuilder()
-
-trk, err := trkB.BuildWithConfig(conf)
+trk, err := tracker.NewFairnessTracker(conf)
 if err != nil {
     log.Fatal(err)
 }
@@ -105,13 +103,34 @@ defer trk.Close()
 
 Tracker construction takes a snapshot of the config, so you can reuse a builder or change the config after a successful build. A custom probability function is copied as a function value: it must still be safe to call concurrently. Its result is clamped to `[0, 1]`; if it returns NaN, the tracker uses the smallest bucket probability for that decision and logs the first occurrence. Do not change the config concurrently with construction.
 
-For manual configurations, use positive dimensions, `0 < Pd < Pi <= 1`, a finite nonnegative `Lambda` (zero disables decay), and a non-nil probability function. `NewFairnessTracker` also needs a positive rotation interval; a manually supplied ticker controls its own cadence. Check construction and tuning errors before using the tracker.
+For manual configurations, use positive dimensions, `0 < Pd < Pi <= 1`, a finite nonnegative `Lambda` (zero disables decay, though rotation still ends a penalty, as described below), and a non-nil probability function. `NewFairnessTracker` also needs a positive rotation interval; a manually supplied ticker controls its own cadence. Check construction and tuning errors before using the tracker.
+
+**How long a penalty lasts:** A client's throttling probability comes down in three ways. It decays over time at rate `Lambda`, each reported success lowers it by `Pd`, and rotation eventually discards it. A structure serves for two rotation periods, first as the standby and then as the active one. A new standby starts empty and learns only from outcomes reported after it was created. A client that stays fully throttled reports no outcomes, so the standby created after its last failure never hears of it, and none of the client's own failures remain when that standby becomes active. That takes two successful rotations after its last reported failure: nominally between 5 and 10 minutes at the default 5-minute rotation.
+
+That is a bound on how long the tracker remembers a client's own feedback, not a deadline for admission. A rotation that fails is retried on the next tick (see [Logging](#logging)), which delays it. And the client's buckets in the new structure may already be penalized by other clients that share them.
+
+This is deliberate. It limits how long a client can be penalized for sharing buckets with a misbehaving one, and it gives a blocked client another chance. `Lambda = 0` therefore disables decay, not forgiveness: with it, rotation is the only way a fully throttled client recovers. A client that is still misbehaving is blocked again after about `1/Pi` further failures. To remember penalties for longer, lengthen `RotationFrequency`; that also lengthens how long a wrongly penalized client waits.
 
 **Allocation limit:** All constructors and the tuner reject dimensions whose estimated peak bucket storage exceeds `config.MaxRotationBytes` (64 MiB per tracker). The estimate is `3 × (4096 + L × (64 + 64 × M))` bytes: two live structures plus the replacement built on rotation, with allowances for rows, bucket objects, and pointers. This is a guardrail on dimensions, not a cap on process RSS: leave headroom for GC, concurrent requests, other trackers, and the application. If tuning exceeds the limit, revisit the expected flow count and bucket count rather than relying on a partial allocation.
 
 **Client identifiers:** Identifiers are placed with SipHash-2-4 under a secret 128-bit key that is redrawn from `crypto/rand` for every generation, so a client that chooses its own identifier cannot aim it at another client's buckets. Every level's bucket is derived from that one 64-bit hash. Two clients with different hashes share a bucket at every level about as often as chance allows (roughly `1/M^L`); two identifiers with the same hash share every level, which bounds the rate at about `2^-64` per pair however many levels are configured. If key generation fails, construction returns an error, and a failed rotation is retried as described under [Logging](#logging).
 
-For a reproducible simulation, set `HashKeySource` on the config to a seeded reader; leave it nil in production. It controls placement only: each throttling decision still draws from `math/rand`'s package-level generator.
+For a reproducible simulation, set two fields on the config and leave both nil in production. `HashKeySource` is a reader that supplies the placement keys. `DecisionSource` is a function that supplies the random number behind each throttling decision; by default that comes from `math/rand`. Seeding `math/rand` with `rand.Seed` does not make decisions reproducible: it has had no effect since Go 1.24.
+
+## Monitoring
+
+The tracker exposes three signals. None needs a logger, and all are safe to call from any goroutine.
+
+- `trk.Counters()` returns cumulative totals: requests registered, requests throttled, successes and failures reported, and outcomes ignored because their value was unknown. It is cheap; take the difference between two readings for a rate. A nonzero `IgnoredOutcomes` is a bug in the caller.
+- `trk.Saturation()` reports how much of the active structure is carrying penalties: the number of penalized buckets at each level and the mean throttling probability. `SharedPenaltyChance()` on the result estimates the chance that every bucket selected for a client with no failures of its own is at or above the penalty threshold (a throttling probability of 0.01); the tuner sizes a structure to keep that at or below 0.0001. It measures occupancy, not how often such a client is rejected: with a single bucket holding 0.01 it returns 1, yet a client sharing that bucket is throttled 1 time in 100. Watch for it rising. It means there are more misbehaving clients than the structure was sized for, or one caller is spreading failures across many identifiers, and more buckets per level are needed. The call reads every bucket, so make it from a metrics scrape rather than per request.
+- `trk.RotationStatus()` reports rotation attempts, described under [Logging](#logging).
+
+```go
+c := trk.Counters()
+s := trk.Saturation()
+log.Printf("registered=%d throttled=%d penalized=%.4f shared=%.2g",
+    c.Registered, c.Throttled, s.PenalizedFraction(), s.SharedPenaltyChance())
+```
 
 ## Logging
 Logging is disabled by default. If rebuilding a generation fails, the tracker keeps serving with its current pair and retries on the next tick. Poll `trk.RotationStatus()` for monitoring: `Failures` is cumulative and `LastError` clears after the next successful rotation. Neither requires enabling a logger. The retry applies to errors returned by construction, not process-level out-of-memory failures.
@@ -120,7 +139,7 @@ package `logger` exposes an interface with `GetLogger` and `SetLogger` methods.
 It also provides an out of the box logger based on std lib. Here's how you can enable it:
 ```go
 import (
-	"github.com/satmihir/fair/pkg/logger"
+	"github.com/satmihir/fair/v2/pkg/logger"
 )
 logger.SetLogger(logger.NewStdLogger())
 ```
@@ -138,7 +157,9 @@ Generate protobuff wrappers with:
 make proto
 ```
 
-Ensure [golangci-lint](https://github.com/golangci/golangci-lint) is installed to execute the linter.
+The module needs Go 1.26 or newer. CI builds and tests on the latest Go release and on the oldest one that still receives security fixes, which is the version `go.mod` declares.
+
+Linting needs [golangci-lint](https://github.com/golangci/golangci-lint) v2, built with a Go version at least as new as the one in `go.mod`. CI pins v2.15.0; `.golangci.yml` uses the v2 format, which v1 releases cannot read.
 
 ## Resources
 

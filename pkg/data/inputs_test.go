@@ -9,13 +9,13 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/satmihir/fair/pkg/request"
+	"github.com/satmihir/fair/v2/pkg/request"
 )
 
 func TestReportOutcomeIgnoresUnknownOutcome(t *testing.T) {
 	cfg := validStructureConfig()
 	cfg.Pi, cfg.Pd = .5, .25
-	s, err := NewStructure(&cfg, 1, true)
+	s, err := NewStructure(withStats(&cfg), 1)
 	require.NoError(t, err)
 	ctx, id := context.Background(), []byte("client")
 	probability := func() float64 { return s.RegisterRequest(ctx, id).ResultStats.FinalProbability }
@@ -45,7 +45,7 @@ func TestFinalProbabilityIsSanitized(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			cfg := validStructureConfig() // Pi is 1: one failure saturates the buckets.
 			cfg.FinalProbabilityFunction = func([]float64) float64 { return tc.returned }
-			s, err := NewStructure(&cfg, 1, true)
+			s, err := NewStructure(withStats(&cfg), 1)
 			require.NoError(t, err)
 			ctx, id := context.Background(), []byte("client")
 			s.ReportOutcome(ctx, id, request.OutcomeFailure)
@@ -93,7 +93,7 @@ func TestDecayIgnoresWallClockStep(t *testing.T) {
 	cfg := validStructureConfig()
 	cfg.Lambda = math.Ln2 // Half-life of one second.
 	clock := &instantClock{now: base}
-	s, err := NewStructureWithClock(&cfg, 1, true, clock)
+	s, err := NewStructureWithClock(withStats(&cfg), 1, clock)
 	require.NoError(t, err)
 	ctx, id := context.Background(), []byte("client")
 	s.ReportOutcome(ctx, id, request.OutcomeFailure)
@@ -112,7 +112,7 @@ func TestNaNFallbackSurvivesCallbackMutation(t *testing.T) {
 		buckets[0] = math.NaN()
 		return math.NaN()
 	}
-	s, err := NewStructure(&cfg, 1, true)
+	s, err := NewStructure(withStats(&cfg), 1)
 	require.NoError(t, err)
 	ctx, id := context.Background(), []byte("client")
 	s.ReportOutcome(ctx, id, request.OutcomeFailure)
@@ -120,4 +120,60 @@ func TestNaNFallbackSurvivesCallbackMutation(t *testing.T) {
 	res := s.RegisterRequest(ctx, id)
 	require.Equal(t, 1., res.ResultStats.FinalProbability)
 	require.True(t, res.ShouldThrottle, "a saturated flow must still be throttled")
+}
+
+// A request is throttled when the draw is below the probability. The draw
+// is in [0, 1), so probability 0 never throttles and probability 1 always does.
+// One client is stepped through the three probabilities: with several clients
+// under a random key, two could share a bucket and change the expected value.
+func TestDecisionSourceDrivesThrottling(t *testing.T) {
+	cfg := validStructureConfig()
+	cfg.Pi, cfg.Pd = .5, .25
+	var draw float64
+	cfg.DecisionSource = func() float64 { return draw }
+	s, err := NewStructure(withStats(&cfg), 1)
+	require.NoError(t, err)
+	ctx, id := context.Background(), []byte("client")
+
+	almostOne := math.Nextafter(1, 0) // The largest draw the source can return.
+	type decision struct {
+		draw     float64
+		throttle bool
+	}
+	for _, step := range []struct {
+		probability float64
+		decisions   []decision
+	}{
+		{0, []decision{{0, false}, {.5, false}, {almostOne, false}}},
+		{.5, []decision{{0, true}, {.49, true}, {.5, false}, {.51, false}, {almostOne, false}}},
+		{1, []decision{{0, true}, {.5, true}, {almostOne, true}}},
+	} {
+		for _, d := range step.decisions {
+			draw = d.draw
+			res := s.RegisterRequest(ctx, id)
+			require.Equal(t, step.probability, res.ResultStats.FinalProbability)
+			require.Equalf(t, d.throttle, res.ShouldThrottle, "probability %g, draw %g", step.probability, d.draw)
+		}
+		s.ReportOutcome(ctx, id, request.OutcomeFailure) // Raise the probability by 0.5.
+	}
+}
+
+func TestDefaultDecisionSourceThrottlesInProportion(t *testing.T) {
+	cfg := validStructureConfig()
+	cfg.Pi, cfg.Pd = .5, .25
+	require.Nil(t, cfg.DecisionSource)
+	s, err := NewStructure(&cfg, 1)
+	require.NoError(t, err)
+	ctx, id := context.Background(), []byte("client")
+	s.ReportOutcome(ctx, id, request.OutcomeFailure) // Probability 0.5.
+
+	const requests = 20000
+	throttled := 0
+	for i := 0; i < requests; i++ {
+		if s.RegisterRequest(ctx, id).ShouldThrottle {
+			throttled++
+		}
+	}
+	// Six standard deviations of a fair coin over 20,000 flips is about 424.
+	require.InDelta(t, requests/2, throttled, 430)
 }

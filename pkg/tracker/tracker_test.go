@@ -10,15 +10,15 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/satmihir/fair/pkg/config"
-	"github.com/satmihir/fair/pkg/request"
-	"github.com/satmihir/fair/pkg/testutils"
-	"github.com/satmihir/fair/pkg/utils"
+	"github.com/satmihir/fair/v2/pkg/config"
+	"github.com/satmihir/fair/v2/pkg/request"
+	"github.com/satmihir/fair/v2/pkg/testutils"
+	"github.com/satmihir/fair/v2/pkg/utils"
 )
 
 func TestEndToEnd(t *testing.T) {
 	trkB := NewFairnessTrackerBuilder()
-	trk, err := trkB.BuildWithDefaultConfig()
+	trk, err := trkB.Build()
 	assert.NoError(t, err)
 	defer trk.Close()
 
@@ -72,18 +72,8 @@ func TestRotationUsesConfigSnapshot(t *testing.T) {
 	}
 }
 
-func TestFairnessTrackerBuilder_BuildWithConfig(t *testing.T) {
-	trkB := NewFairnessTrackerBuilder()
-	trkDefault, err := trkB.BuildWithDefaultConfig()
-	assert.NoError(t, err)
-	defer trkDefault.Close()
-
-	trkWithNilConfig, errWithNilConfig := trkB.BuildWithConfig(nil)
-	assert.Error(t, errWithNilConfig)
-	testutils.TestError(t, &FairnessTrackerError{}, errWithNilConfig, "Configuration cannot be nil", nil)
-	assert.Nil(t, trkWithNilConfig)
-
-	trkWithNilConfig, errWithNilConfig = NewFairnessTracker(nil)
+func TestNewFairnessTracker_NilConfig(t *testing.T) {
+	trkWithNilConfig, errWithNilConfig := NewFairnessTracker(nil)
 	assert.Error(t, errWithNilConfig)
 	testutils.TestError(t, &FairnessTrackerError{}, errWithNilConfig, "Configuration cannot be nil", nil)
 	assert.Nil(t, trkWithNilConfig)
@@ -160,7 +150,7 @@ func TestNewFairnessTrackerWithClockAndTicker_FirstStructureError(t *testing.T) 
 		newTrackerStructureWithClock = prevConstructor
 	})
 
-	newTrackerStructureWithClock = func(_ *config.FairnessTrackerConfig, _ uint64, _ bool, _ utils.IClock) (request.Tracker, error) {
+	newTrackerStructureWithClock = func(_ *config.FairnessTrackerConfig, _ uint64, _ utils.IClock) (request.Tracker, error) {
 		return nil, fmt.Errorf("first structure failed")
 	}
 
@@ -179,7 +169,7 @@ func TestNewFairnessTrackerWithClockAndTicker_SecondStructureError(t *testing.T)
 	})
 
 	call := 0
-	newTrackerStructureWithClock = func(_ *config.FairnessTrackerConfig, id uint64, _ bool, _ utils.IClock) (request.Tracker, error) {
+	newTrackerStructureWithClock = func(_ *config.FairnessTrackerConfig, id uint64, _ utils.IClock) (request.Tracker, error) {
 		call++
 		if call == 1 {
 			return &fakeTracker{id: id}, nil
@@ -200,12 +190,12 @@ func TestRotationRecoversAfterStructureError(t *testing.T) {
 	t.Cleanup(func() { newTrackerStructureWithClock = newStructure })
 	errRotation := fmt.Errorf("rotation creation failed")
 	calls := 0
-	newTrackerStructureWithClock = func(cfg *config.FairnessTrackerConfig, id uint64, stats bool, clock utils.IClock) (request.Tracker, error) {
+	newTrackerStructureWithClock = func(cfg *config.FairnessTrackerConfig, id uint64, clock utils.IClock) (request.Tracker, error) {
 		calls++
 		if calls == 3 { // First rotation, after both initial structures.
 			return nil, errRotation
 		}
-		return newStructure(cfg, id, stats, clock)
+		return newStructure(cfg, id, clock)
 	}
 
 	cfg := config.DefaultFairnessTrackerConfig()
@@ -262,13 +252,13 @@ func TestConcurrentCloseJoinsInFlightRotation(t *testing.T) {
 	newStructure := newTrackerStructureWithClock
 	t.Cleanup(func() { newTrackerStructureWithClock = newStructure })
 	entered, release, finished := make(chan struct{}), make(chan struct{}), make(chan struct{})
-	newTrackerStructureWithClock = func(cfg *config.FairnessTrackerConfig, id uint64, stats bool, clock utils.IClock) (request.Tracker, error) {
+	newTrackerStructureWithClock = func(cfg *config.FairnessTrackerConfig, id uint64, clock utils.IClock) (request.Tracker, error) {
 		if id == 3 {
 			close(entered)
 			<-release
 			defer close(finished)
 		}
-		return newStructure(cfg, id, stats, clock)
+		return newStructure(cfg, id, clock)
 	}
 
 	cfg := config.DefaultFairnessTrackerConfig()

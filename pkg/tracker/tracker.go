@@ -4,12 +4,13 @@ import (
 	"context"
 	"hash/maphash"
 	"sync"
+	"sync/atomic"
 
-	"github.com/satmihir/fair/pkg/config"
-	"github.com/satmihir/fair/pkg/data"
-	"github.com/satmihir/fair/pkg/logger"
-	"github.com/satmihir/fair/pkg/request"
-	"github.com/satmihir/fair/pkg/utils"
+	"github.com/satmihir/fair/v2/pkg/config"
+	"github.com/satmihir/fair/v2/pkg/data"
+	"github.com/satmihir/fair/v2/pkg/logger"
+	"github.com/satmihir/fair/v2/pkg/request"
+	"github.com/satmihir/fair/v2/pkg/utils"
 )
 
 // FairnessTracker is the main entry point for applications. It keeps track of
@@ -41,6 +42,13 @@ type FairnessTracker struct {
 
 	// Logs the first unknown outcome only, so a caller bug cannot flood the log.
 	unknownOutcome sync.Once
+
+	// Cumulative totals reported by Counters.
+	registered      atomic.Uint64
+	throttled       atomic.Uint64
+	successes       atomic.Uint64
+	failures        atomic.Uint64
+	ignoredOutcomes atomic.Uint64
 }
 
 // RotationStatus describes background rotation attempts for one tracker.
@@ -64,10 +72,9 @@ func (ft *FairnessTracker) RotationStatus() RotationStatus {
 var newTrackerStructureWithClock = func(
 	trackerConfig *config.FairnessTrackerConfig,
 	id uint64,
-	includeStats bool,
 	clock utils.IClock,
 ) (request.Tracker, error) {
-	return data.NewStructureWithClock(trackerConfig, id, includeStats, clock)
+	return data.NewStructureWithClock(trackerConfig, id, clock)
 }
 
 // NewFairnessTrackerWithClockAndTicker creates a FairnessTracker using the
@@ -95,13 +102,13 @@ func newFairnessTracker(cfg config.FairnessTrackerConfig, source utils.IClock, t
 	// Every generation shares one never-decreasing view of time.
 	clock := newHighWaterClock(source)
 	newStructure := newTrackerStructureWithClock
-	st1, err := newStructure(&cfg, 1, cfg.IncludeStats, clock)
+	st1, err := newStructure(&cfg, 1, clock)
 	if err != nil {
 		logger.Printf("error in creating first tracker : %v", err)
 		return nil, NewFairnessTrackerError(err, "Failed to create a structure")
 	}
 
-	st2, err := newStructure(&cfg, 2, cfg.IncludeStats, clock)
+	st2, err := newStructure(&cfg, 2, clock)
 	if err != nil {
 		st1.Close()
 		logger.Printf("error in creating second tracker : %v", err)
@@ -126,6 +133,13 @@ func newFairnessTracker(cfg config.FairnessTrackerConfig, source utils.IClock, t
 	// Start a periodic task to rotate underlying structures to keep
 	// changing the hash seeds so we don't continue punishing the same
 	// innocent workloads repeatedly in the worst case of a false positive.
+	//
+	// Each new standby starts empty and learns only from outcomes reported
+	// after this point. A client that stays fully throttled reports none, so
+	// none of its own failures remain once that standby is promoted. This is
+	// intended: it is how a blocked client recovers when decay is disabled,
+	// and copying penalties into the standby would make a false positive
+	// outlive the rotation meant to clear it.
 	go func() {
 		defer close(ft.rotationDone)
 		ticks := ticker.C()
@@ -143,7 +157,7 @@ func newFairnessTracker(cfg config.FairnessTrackerConfig, source utils.IClock, t
 					return
 				default:
 				}
-				s, err := newStructure(&cfg, ft.structureIDCounter, cfg.IncludeStats, clock)
+				s, err := newStructure(&cfg, ft.structureIDCounter, clock)
 				if err != nil {
 					ft.rotationLock.Lock()
 					ft.rotationStatus.Failures++
@@ -200,7 +214,13 @@ func (ft *FairnessTracker) RegisterRequest(ctx context.Context, clientIdentifier
 	// catches up on the next time it is visited. Both structures take time
 	// from the tracker's high-water clock, so the standby catches up to the
 	// latest time this read observed even if the underlying clock rewinds.
-	return ft.mainStructure.RegisterRequest(ctx, clientIdentifier)
+	resp := ft.mainStructure.RegisterRequest(ctx, clientIdentifier)
+
+	ft.registered.Add(1)
+	if resp != nil && resp.ShouldThrottle {
+		ft.throttled.Add(1)
+	}
+	return resp
 }
 
 func (ft *FairnessTracker) outcomeLock(clientIdentifier []byte) *sync.Mutex {
@@ -213,10 +233,17 @@ func (ft *FairnessTracker) outcomeLock(clientIdentifier []byte) *sync.Mutex {
 // An outcome other than OutcomeSuccess or OutcomeFailure is ignored.
 func (ft *FairnessTracker) ReportOutcome(ctx context.Context, clientIdentifier []byte, outcome request.Outcome) *request.ReportOutcomeResult {
 	if outcome != request.OutcomeSuccess && outcome != request.OutcomeFailure {
+		ft.ignoredOutcomes.Add(1)
 		ft.unknownOutcome.Do(func() {
 			logger.Printf("ignoring unknown outcome %d; further occurrences are not logged", outcome)
 		})
 		return &request.ReportOutcomeResult{}
+	}
+
+	if outcome == request.OutcomeSuccess {
+		ft.successes.Add(1)
+	} else {
+		ft.failures.Add(1)
 	}
 
 	// Wait for this client's turn before pinning a generation pair.

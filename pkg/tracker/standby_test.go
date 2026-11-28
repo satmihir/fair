@@ -10,8 +10,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/satmihir/fair/pkg/config"
-	"github.com/satmihir/fair/pkg/request"
+	"github.com/satmihir/fair/v2/pkg/config"
+	"github.com/satmihir/fair/v2/pkg/request"
 )
 
 type manualClock struct {
@@ -129,4 +129,43 @@ func TestPromotionKeepsDecayObservedBeforeClockRewind(t *testing.T) {
 	require.InDelta(t, .5, probability(), 1e-12)
 	clock.Sleep(time.Second)
 	require.InDelta(t, .25, probability(), 1e-12)
+}
+
+// Rotation is the recovery path when decay is disabled. A blocked client
+// reports nothing, so the standby built after its last failure never learns
+// of it. Carrying the penalty into the standby instead would block the client
+// for good, and would keep a wrongly penalized client penalized.
+func TestBlockedClientRecoversAfterTwoRotationsWithoutDecay(t *testing.T) {
+	cfg := config.DefaultFairnessTrackerConfig()
+	cfg.Pi, cfg.Pd, cfg.Lambda = .5, .25, 0
+	cfg.IncludeStats = true
+	clock := &manualClock{now: time.Unix(1_700_000_000, 0)}
+	ticker := newFakeTicker()
+	ft, err := NewFairnessTrackerWithClockAndTicker(cfg, clock, ticker)
+	require.NoError(t, err)
+	defer ft.Close()
+
+	ctx, id := context.Background(), []byte("client")
+	probability := func() float64 { return ft.RegisterRequest(ctx, id).ResultStats.FinalProbability }
+
+	ft.ReportOutcome(ctx, id, request.OutcomeFailure)
+	ft.ReportOutcome(ctx, id, request.OutcomeFailure)
+	require.Equal(t, 1., probability())
+
+	// Time alone never forgives without decay, however often the client asks.
+	clock.Sleep(24 * time.Hour)
+	require.Equal(t, 1., probability())
+
+	// The standby saw both failures, so the first promotion keeps the block.
+	ticker.tickAndWait(t, ft)
+	require.Equal(t, 1., probability())
+
+	// The standby built at that promotion saw nothing.
+	ticker.tickAndWait(t, ft)
+	require.Zero(t, probability(), "a blocked client must recover at the second rotation")
+
+	// A client that is still misbehaving is blocked again.
+	ft.ReportOutcome(ctx, id, request.OutcomeFailure)
+	ft.ReportOutcome(ctx, id, request.OutcomeFailure)
+	require.Equal(t, 1., probability())
 }

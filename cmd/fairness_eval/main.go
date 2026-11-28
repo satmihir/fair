@@ -10,10 +10,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/satmihir/fair/internal/simticker"
-	"github.com/satmihir/fair/pkg/config"
-	"github.com/satmihir/fair/pkg/request"
-	"github.com/satmihir/fair/pkg/tracker"
+	"github.com/satmihir/fair/v2/internal/simticker"
+	"github.com/satmihir/fair/v2/pkg/config"
+	"github.com/satmihir/fair/v2/pkg/request"
+	"github.com/satmihir/fair/v2/pkg/tracker"
 )
 
 const (
@@ -277,10 +277,10 @@ func runScenarioWithVariant(
 		ticker = simticker.New()
 
 		// Placement keys and throttling decisions draw from separate sources;
-		// fix both so this experiment is reproducible.
+		// fix both so this experiment is reproducible. Events are replayed on
+		// one goroutine, so neither source needs to be safe for concurrent use.
 		conf.HashKeySource = rand.New(rand.NewSource(seed))
-		//nolint:staticcheck // Throttling decisions use math/rand's package global.
-		rand.Seed(seed)
+		conf.DecisionSource = rand.New(rand.NewSource(seed + 1<<32)).Float64
 		trackerInstance, err := tracker.NewFairnessTrackerWithClockAndTicker(conf, clock, ticker)
 		if err != nil {
 			return runResult{}, err

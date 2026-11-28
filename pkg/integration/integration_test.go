@@ -8,10 +8,10 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/satmihir/fair/internal/simticker"
-	"github.com/satmihir/fair/pkg/config"
-	"github.com/satmihir/fair/pkg/request"
-	"github.com/satmihir/fair/pkg/tracker"
+	"github.com/satmihir/fair/v2/internal/simticker"
+	"github.com/satmihir/fair/v2/pkg/config"
+	"github.com/satmihir/fair/v2/pkg/request"
+	"github.com/satmihir/fair/v2/pkg/tracker"
 )
 
 type clock struct{ now time.Time }
@@ -22,17 +22,15 @@ func (c *clock) Sleep(d time.Duration) { c.now = c.now.Add(d) }
 type counts struct{ served, failed, throttled int }
 
 func TestEnforcedNoisyNeighbor(t *testing.T) {
-	// The public tracker uses the global RNG for admission.
-	//nolint:staticcheck // Reproduce the same workload in this serial test.
-	rand.Seed(9)
 	c := &clock{now: time.Unix(100, 0)}
 	ticker := simticker.New()
 	cfg := &config.FairnessTrackerConfig{
 		L: 4, M: 128, Pi: 1, Pd: 0.25,
 		// Disable decay to distinguish rotation-based recovery from aging.
 		Lambda: 0, FinalProbabilityFunction: config.MinFinalProbabilityFunction,
-		// Fixed placement keys, so no run can differ by a chance collision.
-		HashKeySource: rand.New(rand.NewSource(9)),
+		// Fixed placement keys and decisions, so every run is the same.
+		HashKeySource:  rand.New(rand.NewSource(9)),
+		DecisionSource: rand.New(rand.NewSource(10)).Float64,
 	}
 	trk, err := tracker.NewFairnessTrackerWithClockAndTicker(cfg, c, ticker)
 	require.NoError(t, err)

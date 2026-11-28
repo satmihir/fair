@@ -6,9 +6,9 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/satmihir/fair/pkg/config"
-	"github.com/satmihir/fair/pkg/request"
-	"github.com/satmihir/fair/pkg/utils"
+	"github.com/satmihir/fair/v2/pkg/config"
+	"github.com/satmihir/fair/v2/pkg/request"
+	"github.com/satmihir/fair/v2/pkg/utils"
 )
 
 // Pause the failure after main has applied it, but before standby does.

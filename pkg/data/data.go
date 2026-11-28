@@ -10,10 +10,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/satmihir/fair/pkg/config"
-	"github.com/satmihir/fair/pkg/logger"
-	"github.com/satmihir/fair/pkg/request"
-	"github.com/satmihir/fair/pkg/utils"
+	"github.com/satmihir/fair/v2/pkg/config"
+	"github.com/satmihir/fair/v2/pkg/logger"
+	"github.com/satmihir/fair/v2/pkg/request"
+	"github.com/satmihir/fair/v2/pkg/utils"
 )
 
 // Represents a bucket in the leveled structure
@@ -51,13 +51,16 @@ type Structure struct {
 	epoch time.Time
 	// Logs the first unusable final probability only.
 	badProbability sync.Once
+	// The uniform draw in [0, 1) behind each throttling decision.
+	decision func() float64
 	// Includes stats in results. Useful for debugging but may slightly affect performance.
 	includeStats bool
 }
 
 // NewStructureWithClock creates a Structure using the provided clock. This is
 // primarily used in tests and simulations where time needs to be controlled.
-func NewStructureWithClock(input *config.FairnessTrackerConfig, id uint64, includeStats bool, clock utils.IClock) (*Structure, error) {
+// Per-request stats are included when the config's IncludeStats is set.
+func NewStructureWithClock(input *config.FairnessTrackerConfig, id uint64, clock utils.IClock) (*Structure, error) {
 	if input == nil {
 		return nil, NewDataError(nil, "FairnessTrackerConfig cannot be nil")
 	}
@@ -67,6 +70,11 @@ func NewStructureWithClock(input *config.FairnessTrackerConfig, id uint64, inclu
 	}
 	if utils.IsNil(clock) {
 		return nil, NewDataError(nil, "clock cannot be nil")
+	}
+
+	decision := cfg.DecisionSource
+	if decision == nil {
+		decision = rand.Float64
 	}
 
 	hashKey, err := newHashKey(cfg.HashKeySource)
@@ -90,13 +98,14 @@ func NewStructureWithClock(input *config.FairnessTrackerConfig, id uint64, inclu
 		hashKey:      hashKey,
 		clock:        clock,
 		epoch:        clock.Now(),
-		includeStats: includeStats,
+		includeStats: cfg.IncludeStats,
+		decision:     decision,
 	}, nil
 }
 
 // NewStructure creates a Structure using the real system clock.
-func NewStructure(config *config.FairnessTrackerConfig, id uint64, includeStats bool) (*Structure, error) {
-	return NewStructureWithClock(config, id, includeStats, utils.NewRealClock())
+func NewStructure(config *config.FairnessTrackerConfig, id uint64) (*Structure, error) {
+	return NewStructureWithClock(config, id, utils.NewRealClock())
 }
 
 // GetID returns the identifier of this data structure.
@@ -139,8 +148,10 @@ func (s *Structure) RegisterRequest(_ context.Context, clientIdentifier []byte) 
 		stats.FinalProbability = pFinal
 	}
 
-	// Decide whether to throttle the request based on the probability.
-	shouldThrottle := rand.Float64() <= pFinal
+	// Throttle when the draw falls below the probability. The draw is in
+	// [0, 1), so the comparison must be strict: probability 0 never throttles
+	// (even on a draw of exactly 0) and probability 1 always does.
+	shouldThrottle := s.decision() < pFinal
 
 	return &request.RegisterRequestResult{
 		ShouldThrottle: shouldThrottle,
@@ -191,6 +202,33 @@ func (s *Structure) ReportOutcome(_ context.Context, clientIdentifier []byte, ou
 	return &request.ReportOutcomeResult{}
 }
 
+// PenaltyOccupancy reports how much of the structure is carrying penalties.
+// For each level it counts the buckets whose probability, after decay, is at
+// least threshold, and it returns the mean probability across all buckets.
+// It reads every bucket without changing any, so its cost grows with L×M:
+// call it from a metrics scrape, not per request.
+func (s *Structure) PenaltyOccupancy(threshold float64) (penalizedByLevel []int, meanProbability float64) {
+	now := s.clock.Now().Sub(s.epoch).Milliseconds()
+	penalizedByLevel = make([]int, len(s.levels))
+	var total float64
+	for l, level := range s.levels {
+		for _, buck := range level {
+			buck.mu.Lock()
+			p := buck.probability
+			if now > buck.lastUpdatedTimeMillis {
+				p = adjustProbability(p, s.config.Lambda, uint64(now-buck.lastUpdatedTimeMillis))
+			}
+			buck.mu.Unlock()
+
+			total += p
+			if p >= threshold {
+				penalizedByLevel[l]++
+			}
+		}
+	}
+	return penalizedByLevel, total / (float64(s.config.L) * float64(s.config.M))
+}
+
 // Visit the buckets belonging to the given clientIdentifier
 // Also takes the bucket lock and manages probability decay prior to calling the handler
 func (s *Structure) visitBuckets(clientIdentifier []byte, fn func(uint32, uint32, *bucket)) {
@@ -221,7 +259,7 @@ func (s *Structure) visitBuckets(clientIdentifier []byte, fn func(uint32, uint32
 // newHashKey reads a 128-bit key from source, or from crypto/rand when source
 // is nil. Placement keys must stay secret, so they do not come from math/rand:
 // that generator is shared with the rest of the process and can be made to
-// repeat, by rand.Seed or by GODEBUG=randautoseed=0.
+// repeat, for example with GODEBUG=randautoseed=0.
 func newHashKey(source io.Reader) ([2]uint64, error) {
 	if utils.IsNil(source) {
 		source = crand.Reader

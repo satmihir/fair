@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/satmihir/fair/pkg/tracker"
+	"github.com/satmihir/fair/v2/pkg/tracker"
 )
 
 // Ticker is a single-driver ticker: only Rotate can trigger a tick.

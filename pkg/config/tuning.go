@@ -5,7 +5,7 @@ import (
 	"math"
 	"time"
 
-	"github.com/satmihir/fair/pkg/logger"
+	"github.com/satmihir/fair/v2/pkg/logger"
 )
 
 const (
@@ -44,7 +44,7 @@ var (
 			logger.Fatalf("Cannot compute final probability with empty buckets slice")
 		}
 
-		var minVal float64 = 1.
+		minVal := 1.
 		for _, b := range buckets {
 			minVal = math.Min(minVal, b)
 		}

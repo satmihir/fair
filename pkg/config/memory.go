@@ -21,7 +21,7 @@ func checkRotationBudget(levels, buckets uint32) error {
 	// budget before comparing levels: multiplying first can wrap at large L*M.
 	perRow := rowBytes + uint64(buckets)*bucketBytes
 	if uint64(levels) > (MaxRotationBytes/generations-fixedBytes)/perRow {
-		return fmt.Errorf("L=%d M=%d exceed the %d-byte rotation storage budget", levels, buckets, MaxRotationBytes)
+		return fmt.Errorf("dimensions L=%d M=%d exceed the %d-byte rotation storage budget", levels, buckets, MaxRotationBytes)
 	}
 	return nil
 }

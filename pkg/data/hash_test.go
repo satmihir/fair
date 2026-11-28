@@ -1,3 +1,8 @@
+// rand.Seed has had no effect since Go 1.24. Restore it for this test binary so
+// TestFreshKeysIgnoreGlobalMathRandSeed can pin the generator the keys must
+// not use.
+//
+//go:debug randseednop=0
 package data
 
 import (
@@ -13,7 +18,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/satmihir/fair/pkg/config"
+	"github.com/satmihir/fair/v2/pkg/config"
 )
 
 // Vectors from the SipHash reference implementation: the key is bytes
@@ -77,7 +82,7 @@ func hashTestStructure(t *testing.T, levels, buckets uint32, keys *rand.Rand) *S
 	t.Helper()
 	cfg := hashTestConfig(levels, buckets)
 	cfg.HashKeySource = keys
-	s, err := NewStructure(&cfg, 1, true)
+	s, err := NewStructure(withStats(&cfg), 1)
 	require.NoError(t, err)
 	return s
 }
@@ -182,7 +187,7 @@ func TestFreshKeysComeFromCryptoRand(t *testing.T) {
 	require.Nil(t, cfg.HashKeySource)
 	seen := make(map[[2]uint64]bool)
 	for i := 0; i < 32; i++ {
-		s, err := NewStructure(&cfg, 1, true)
+		s, err := NewStructure(withStats(&cfg), 1)
 		require.NoError(t, err)
 		require.NotEqual(t, [2]uint64{}, s.hashKey)
 		require.False(t, seen[s.hashKey], "a 128-bit key repeated")
@@ -190,14 +195,22 @@ func TestFreshKeysComeFromCryptoRand(t *testing.T) {
 	}
 }
 
-// Keys must not follow math/rand's package-level generator, which rand.Seed
-// or GODEBUG=randautoseed=0 can make repeat across process starts.
+// Keys must not follow math/rand's package-level generator, which
+// GODEBUG=randautoseed=0 can make repeat across process starts. Seeding it
+// here reproduces that: a key drawn from it would come out the same twice.
 func TestFreshKeysIgnoreGlobalMathRandSeed(t *testing.T) {
+	//nolint:staticcheck // Deliberately pin the generator the keys must not use.
+	rand.Seed(1)
+	pinned := rand.Uint64()
+	//nolint:staticcheck
+	rand.Seed(1)
+	require.Equal(t, pinned, rand.Uint64(), "rand.Seed must take effect for this test to mean anything")
+
 	cfg := hashTestConfig(4, 4096)
 	draw := func() [2]uint64 {
-		//nolint:staticcheck // Deliberately pin the generator the keys must not use.
+		//nolint:staticcheck
 		rand.Seed(1)
-		s, err := NewStructure(&cfg, 1, true)
+		s, err := NewStructure(withStats(&cfg), 1)
 		require.NoError(t, err)
 		return s.hashKey
 	}
@@ -213,7 +226,7 @@ func TestInjectedKeySourceIsReadSixteenBytesAtATime(t *testing.T) {
 	// A reader that returns one byte per call must still fill the key.
 	cfg := hashTestConfig(4, 4096)
 	cfg.HashKeySource = iotest.OneByteReader(fixedKeys(4))
-	slow, err := NewStructure(&cfg, 1, true)
+	slow, err := NewStructure(withStats(&cfg), 1)
 	require.NoError(t, err)
 	require.Equal(t, first.hashKey, slow.hashKey)
 }
@@ -227,7 +240,7 @@ func TestKeyGenerationFailureFailsConstruction(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			cfg := hashTestConfig(4, 4096)
 			cfg.HashKeySource = source
-			s, err := NewStructure(&cfg, 1, true)
+			s, err := NewStructure(withStats(&cfg), 1)
 			require.Nil(t, s)
 			var dataErr *DataError
 			require.ErrorAs(t, err, &dataErr)
