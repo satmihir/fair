@@ -1,6 +1,10 @@
 package config
 
-import "time"
+import (
+	"fmt"
+	"math"
+	"time"
+)
 
 // FairnessTrackerConfig defines the parameters for the underlying data
 // structure used by the fairness tracker. Most users will rely on
@@ -22,4 +26,23 @@ type FairnessTrackerConfig struct {
 	IncludeStats bool
 	// The function to choose the final probability from all the bucket probabilities
 	FinalProbabilityFunction FinalProbabilityFunction
+}
+
+// ValidateStructure checks the parameters needed by the underlying data structure.
+// It does not impose a memory budget or validate RotationFrequency, which only
+// matters for callers that start a ticker.
+func (c *FairnessTrackerConfig) ValidateStructure() error {
+	switch {
+	case c == nil:
+		return fmt.Errorf("FairnessTrackerConfig cannot be nil")
+	case c.M == 0 || c.L == 0:
+		return fmt.Errorf("M and L must be positive, got M=%d L=%d", c.M, c.L)
+	case !(0 < c.Pd && c.Pd < c.Pi && c.Pi <= 1):
+		return fmt.Errorf("probability increments must satisfy 0 < Pd < Pi <= 1, got Pd=%g Pi=%g", c.Pd, c.Pi)
+	case math.IsNaN(c.Lambda) || math.IsInf(c.Lambda, 0) || c.Lambda < 0:
+		return fmt.Errorf("Lambda must be finite and nonnegative, got %g", c.Lambda)
+	case c.FinalProbabilityFunction == nil:
+		return fmt.Errorf("FinalProbabilityFunction cannot be nil")
+	}
+	return nil
 }

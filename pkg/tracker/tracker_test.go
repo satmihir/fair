@@ -6,14 +6,14 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/satmihir/fair/pkg/config"
 	"github.com/satmihir/fair/pkg/logger"
 	"github.com/satmihir/fair/pkg/request"
 	"github.com/satmihir/fair/pkg/testutils"
 	"github.com/satmihir/fair/pkg/utils"
-
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 func TestEndToEnd(t *testing.T) {
@@ -49,26 +49,30 @@ func TestEndToEnd(t *testing.T) {
 	assert.False(t, resp.ShouldThrottle)
 }
 
-func TestRotation(t *testing.T) {
-	trkB := NewFairnessTrackerBuilder()
-	trkB.SetRotationFrequency(1 * time.Second)
-	trk, err := trkB.Build()
-	assert.NoError(t, err)
+func TestRotationUsesConfigSnapshot(t *testing.T) {
+	cfg := config.DefaultFairnessTrackerConfig()
+	cfg.RotationFrequency = 0 // The injected ticker controls rotation.
+	cfg.IncludeStats = true
+	cfg.FinalProbabilityFunction = func([]float64) float64 { return 0.25 }
+	ticker := newFakeTicker()
+	trk, err := NewFairnessTrackerWithClockAndTicker(cfg, utils.NewRealClock(), ticker)
+	require.NoError(t, err)
+	t.Cleanup(trk.Close)
 
-	for i := 0; i < 3; i++ {
-		trk.rotationLock.RLock()
-		diff := int(trk.secondaryStructure.GetID() - trk.mainStructure.GetID())
-		trk.rotationLock.RUnlock()
-
-		assert.Equal(t, diff, 1)
-		time.Sleep(1 * time.Second)
+	cfg.IncludeStats = false
+	cfg.FinalProbabilityFunction = func([]float64) float64 { return 0.75 }
+	// After two ticks, the structure created on the first tick is serving requests.
+	for mainID := uint64(2); mainID <= 3; mainID++ {
+		ticker.ch <- time.Now()
+		require.Eventually(t, func() bool {
+			trk.rotationLock.RLock()
+			defer trk.rotationLock.RUnlock()
+			return trk.mainStructure.GetID() == mainID && trk.secondaryStructure.GetID() == mainID+1
+		}, time.Second, time.Millisecond)
+		resp := trk.RegisterRequest(context.Background(), []byte("client"))
+		require.NotNil(t, resp.ResultStats)
+		require.Equal(t, 0.25, resp.ResultStats.FinalProbability)
 	}
-
-	trk.rotationLock.RLock()
-	secID := trk.secondaryStructure.GetID()
-	trk.rotationLock.RUnlock()
-
-	assert.True(t, secID >= 2)
 }
 
 func TestFairnessTrackerBuilder_BuildWithConfig(t *testing.T) {
@@ -89,7 +93,7 @@ func TestFairnessTrackerBuilder_BuildWithConfig(t *testing.T) {
 }
 func TestNewFairnessTrackerWithClockAndTicker_NilConfig(t *testing.T) {
 	// Passing a nil config should return an error rather than causing a panic.
-	ft, err := NewFairnessTrackerWithClockAndTicker(nil, nil, nil)
+	ft, err := NewFairnessTrackerWithClockAndTicker(nil, utils.NewRealClock(), newFakeTicker())
 
 	assert.Nil(t, ft)
 	if assert.Error(t, err) {
@@ -158,7 +162,9 @@ func TestNewFairnessTrackerWithClockAndTicker_FirstStructureError(t *testing.T) 
 		return nil, fmt.Errorf("first structure failed")
 	}
 
-	ft, err := NewFairnessTrackerWithClockAndTicker(config.DefaultFairnessTrackerConfig(), nil, nil)
+	ticker := newFakeTicker()
+	ft, err := NewFairnessTrackerWithClockAndTicker(config.DefaultFairnessTrackerConfig(), utils.NewRealClock(), ticker)
+	require.False(t, ticker.stopped, "caller retains the ticker on failure")
 	require.Nil(t, ft)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Failed to create a structure")
@@ -179,7 +185,9 @@ func TestNewFairnessTrackerWithClockAndTicker_SecondStructureError(t *testing.T)
 		return nil, fmt.Errorf("second structure failed")
 	}
 
-	ft, err := NewFairnessTrackerWithClockAndTicker(config.DefaultFairnessTrackerConfig(), nil, nil)
+	ticker := newFakeTicker()
+	ft, err := NewFairnessTrackerWithClockAndTicker(config.DefaultFairnessTrackerConfig(), utils.NewRealClock(), ticker)
+	require.False(t, ticker.stopped, "caller retains the ticker on failure")
 	require.Nil(t, ft)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Failed to create a structure")
@@ -206,7 +214,7 @@ func TestNewFairnessTrackerWithClockAndTicker_RotationStructureError(t *testing.
 	}
 
 	ticker := newFakeTicker()
-	ft, err := NewFairnessTrackerWithClockAndTicker(config.DefaultFairnessTrackerConfig(), nil, ticker)
+	ft, err := NewFairnessTrackerWithClockAndTicker(config.DefaultFairnessTrackerConfig(), utils.NewRealClock(), ticker)
 	require.NoError(t, err)
 	require.NotNil(t, ft)
 
@@ -221,4 +229,43 @@ func TestNewFairnessTrackerWithClockAndTicker_RotationStructureError(t *testing.
 
 	ft.Close()
 	require.True(t, ticker.stopped)
+}
+
+func TestNewFairnessTrackerRejectsInvalidRotationFrequency(t *testing.T) {
+	for _, frequency := range []time.Duration{0, -time.Second} {
+		t.Run(frequency.String(), func(t *testing.T) {
+			cfg := config.DefaultFairnessTrackerConfig()
+			cfg.RotationFrequency = frequency
+			trk, err := NewFairnessTracker(cfg)
+			require.ErrorAs(t, err, new(*FairnessTrackerError))
+			require.Nil(t, trk)
+		})
+	}
+}
+
+func TestNewFairnessTrackerRejectsNilCallback(t *testing.T) {
+	cfg := config.DefaultFairnessTrackerConfig()
+	cfg.FinalProbabilityFunction = nil
+	trk, err := NewFairnessTracker(cfg)
+	require.ErrorAs(t, err, new(*FairnessTrackerError))
+	require.Nil(t, trk)
+}
+
+func TestNewFairnessTrackerRejectsNilDependencies(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		clock  utils.IClock
+		ticker utils.ITicker
+	}{
+		{"nil clock", nil, newFakeTicker()},
+		{"typed nil clock", (*utils.Clock)(nil), newFakeTicker()},
+		{"nil ticker", utils.NewRealClock(), nil},
+		{"typed nil ticker", utils.NewRealClock(), (*fakeTicker)(nil)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			trk, err := NewFairnessTrackerWithClockAndTicker(config.DefaultFairnessTrackerConfig(), tc.clock, tc.ticker)
+			require.ErrorAs(t, err, new(*FairnessTrackerError))
+			require.Nil(t, trk)
+		})
+	}
 }

@@ -2,93 +2,77 @@ package data
 
 import (
 	"context"
-	"github.com/satmihir/fair/pkg/config"
-	"github.com/satmihir/fair/pkg/request"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	"math"
 	"math/rand"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"github.com/satmihir/fair/pkg/config"
+	"github.com/satmihir/fair/pkg/request"
+	"github.com/satmihir/fair/pkg/utils"
 )
 
-func TestValidateStructConfig(t *testing.T) {
-	conf := &config.FairnessTrackerConfig{
-		L: 0,
+func validStructureConfig() config.FairnessTrackerConfig {
+	return config.FairnessTrackerConfig{
+		L: 2, M: 24, Pi: 1, Pd: .25,
+		FinalProbabilityFunction: config.MeanFinalProbabilityFunction,
 	}
-
-	err := validateStructureConfig(conf)
-	assert.Error(t, err)
-
-	conf = &config.FairnessTrackerConfig{
-		L: 1,
-		M: 0,
-	}
-
-	err = validateStructureConfig(conf)
-	assert.Error(t, err)
-
-	conf = &config.FairnessTrackerConfig{
-		L:  1,
-		M:  1,
-		Pd: 0,
-		Pi: 0,
-	}
-
-	err = validateStructureConfig(conf)
-	assert.Error(t, err)
-
-	conf = &config.FairnessTrackerConfig{
-		L:  1,
-		M:  1,
-		Pd: 10,
-		Pi: 10,
-	}
-
-	err = validateStructureConfig(conf)
-	assert.Error(t, err)
-
-	conf = &config.FairnessTrackerConfig{
-		L:  1,
-		M:  1,
-		Pd: .15,
-		Pi: .1,
-	}
-
-	err = validateStructureConfig(conf)
-	assert.Error(t, err)
-
-	conf = &config.FairnessTrackerConfig{
-		L:  1,
-		M:  1,
-		Pd: .1,
-		Pi: .15,
-	}
-
-	err = validateStructureConfig(conf)
-	assert.NoError(t, err)
 }
 
 func TestNewStructureFailsValidation(t *testing.T) {
-	conf := &config.FairnessTrackerConfig{
-		L:  1,
-		M:  1,
-		Pd: .15,
-		Pi: .1,
+	for name, mutate := range map[string]func(*config.FairnessTrackerConfig){
+		"zero levels":        func(c *config.FairnessTrackerConfig) { c.L = 0 },
+		"zero width":         func(c *config.FairnessTrackerConfig) { c.M = 0 },
+		"zero increment":     func(c *config.FairnessTrackerConfig) { c.Pi = 0 },
+		"zero decrement":     func(c *config.FairnessTrackerConfig) { c.Pd = 0 },
+		"increment over one": func(c *config.FairnessTrackerConfig) { c.Pi = 1.1 },
+		"equal adjustments":  func(c *config.FairnessTrackerConfig) { c.Pd = c.Pi },
+		"NaN increment":      func(c *config.FairnessTrackerConfig) { c.Pi = math.NaN() },
+		"infinite decay":     func(c *config.FairnessTrackerConfig) { c.Lambda = math.Inf(1) },
+		"negative decay":     func(c *config.FairnessTrackerConfig) { c.Lambda = -1 },
+		"nil callback":       func(c *config.FairnessTrackerConfig) { c.FinalProbabilityFunction = nil },
+	} {
+		t.Run(name, func(t *testing.T) {
+			cfg := validStructureConfig()
+			mutate(&cfg)
+			s, err := NewStructure(&cfg, 1, false)
+			require.IsType(t, &DataError{}, err)
+			require.Nil(t, s)
+		})
 	}
-	_, err := NewStructure(conf, 1, true)
-	assert.Error(t, err)
+}
+
+func TestNewStructureRejectsNilClocks(t *testing.T) {
+	cfg := validStructureConfig()
+	for _, clock := range []utils.IClock{nil, (*utils.Clock)(nil)} {
+		s, err := NewStructureWithClock(&cfg, 1, false, clock)
+		require.IsType(t, &DataError{}, err)
+		require.Nil(t, s)
+	}
+}
+
+func TestNewStructureSnapshotsConfig(t *testing.T) {
+	cfg := validStructureConfig()
+	s, err := NewStructure(&cfg, 1, true)
+	require.NoError(t, err)
+	cfg = config.FairnessTrackerConfig{}
+
+	ctx := context.Background()
+	client := []byte("client")
+	s.ReportOutcome(ctx, client, request.OutcomeFailure)
+	s.ReportOutcome(ctx, client, request.OutcomeSuccess)
+	stats := s.RegisterRequest(ctx, client).ResultStats
+	require.Equal(t, []float64{.75, .75}, stats.BucketProbabilities)
+	require.Equal(t, .75, stats.FinalProbability)
 }
 
 func TestNewStructure(t *testing.T) {
-	conf := &config.FairnessTrackerConfig{
-		L:  2,
-		M:  24,
-		Pd: .1,
-		Pi: .15,
-	}
-	structure, err := NewStructure(conf, 1, true)
+	conf := validStructureConfig()
+	structure, err := NewStructure(&conf, 1, true)
 	assert.NoError(t, err)
 	assert.NotNil(t, structure)
 
@@ -110,13 +94,8 @@ func TestHashes(t *testing.T) {
 }
 
 func TestGetID(t *testing.T) {
-	conf := &config.FairnessTrackerConfig{
-		L:  2,
-		M:  24,
-		Pd: .1,
-		Pi: .15,
-	}
-	structure, err := NewStructure(conf, 1, true)
+	conf := validStructureConfig()
+	structure, err := NewStructure(&conf, 1, true)
 	assert.NoError(t, err)
 	assert.NotNil(t, structure)
 
@@ -229,8 +208,9 @@ func TestAdjustProbability(t *testing.T) {
 }
 
 // Explicitly test nil config case
-func TestValidateStructConfig_NilConfig(t *testing.T) {
-	err := validateStructureConfig(nil)
+func TestNewStructureRejectsNilConfig(t *testing.T) {
+	structure, err := NewStructure(nil, 1, false)
+	assert.Nil(t, structure)
 
 	// Expect an error instead of panic
 	assert.Error(t, err)
@@ -347,10 +327,11 @@ func TestReportOutcomeClampsProbability(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			conf := &config.FairnessTrackerConfig{
-				L:  1,
-				M:  1,
-				Pi: tc.pi,
-				Pd: tc.pd,
+				L:                        1,
+				M:                        1,
+				Pi:                       tc.pi,
+				Pd:                       tc.pd,
+				FinalProbabilityFunction: config.MeanFinalProbabilityFunction,
 			}
 			structure, err := NewStructure(conf, 1, false)
 			require.NoError(t, err, "NewStructure should not return an error with valid config")
@@ -380,10 +361,11 @@ func TestReportOutcomeClamping_Concurrent(t *testing.T) {
 	defer rand.Seed(time.Now().UnixNano())
 
 	conf := &config.FairnessTrackerConfig{
-		L:  1,
-		M:  1,
-		Pi: 0.1,
-		Pd: 0.05,
+		L:                        1,
+		M:                        1,
+		Pi:                       0.1,
+		Pd:                       0.05,
+		FinalProbabilityFunction: config.MeanFinalProbabilityFunction,
 	}
 
 	structure, err := NewStructure(conf, 1, false)

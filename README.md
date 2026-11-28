@@ -1,5 +1,5 @@
 # FAIR
-![Coverage](https://img.shields.io/badge/Coverage-46.6%25-yellow)
+![Coverage](https://img.shields.io/badge/Coverage-49.3%25-yellow)
 [![Go Report Card](https://goreportcard.com/badge/github.com/satmihir/fair)](https://goreportcard.com/report/github.com/satmihir/fair)
 [![GoDoc](https://godoc.org/github.com/satmihir/fair?status.svg)](https://godoc.org/github.com/satmihir/fair)
 
@@ -163,6 +163,10 @@ if err != nil {
 }
 defer trk.Close()
 ```
+
+Tracker construction takes a snapshot of the config, so you can reuse a builder or change the config after a successful build. A custom probability function is copied as a function value: it must still be safe to call concurrently. Do not change the config concurrently with construction.
+
+For manual configurations, use positive dimensions, `0 < Pd < Pi <= 1`, a finite nonnegative `Lambda` (zero disables decay), and a non-nil probability function. `NewFairnessTracker` also needs a positive rotation interval; a manually supplied ticker controls its own cadence. Check construction and tuning errors before using the tracker.
 
 ## Logging
 Fair provides logs present which by default are disabled.

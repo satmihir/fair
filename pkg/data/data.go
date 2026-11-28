@@ -2,7 +2,6 @@ package data
 
 import (
 	"context"
-	"fmt"
 	"math"
 	"math/rand"
 	"sync"
@@ -40,7 +39,7 @@ type Structure struct {
 	// of throttling the request.
 	levels [][]*bucket
 	// The config associated with this structure
-	config *config.FairnessTrackerConfig
+	config config.FairnessTrackerConfig
 	// The unique ID of the structure
 	id uint64
 	// The murmur hash seed
@@ -53,14 +52,21 @@ type Structure struct {
 
 // NewStructureWithClock creates a Structure using the provided clock. This is
 // primarily used in tests and simulations where time needs to be controlled.
-func NewStructureWithClock(config *config.FairnessTrackerConfig, id uint64, includeStats bool, clock utils.IClock) (*Structure, error) {
-	if err := validateStructureConfig(config); err != nil {
-		return nil, NewDataError(err, "The input config failed validation: %v", config)
+func NewStructureWithClock(input *config.FairnessTrackerConfig, id uint64, includeStats bool, clock utils.IClock) (*Structure, error) {
+	if input == nil {
+		return nil, NewDataError(nil, "FairnessTrackerConfig cannot be nil")
+	}
+	cfg := *input
+	if err := cfg.ValidateStructure(); err != nil {
+		return nil, NewDataError(err, "invalid structure configuration")
+	}
+	if utils.IsNil(clock) {
+		return nil, NewDataError(nil, "clock cannot be nil")
 	}
 
-	levels := make([][]*bucket, config.L)
+	levels := make([][]*bucket, cfg.L)
 	for i := range levels {
-		levels[i] = make([]*bucket, config.M)
+		levels[i] = make([]*bucket, cfg.M)
 
 		for j := range levels[i] {
 			levels[i][j] = newBucket(clock)
@@ -69,7 +75,7 @@ func NewStructureWithClock(config *config.FairnessTrackerConfig, id uint64, incl
 
 	return &Structure{
 		levels:       levels,
-		config:       config,
+		config:       cfg,
 		id:           id,
 		murmurSeed:   rand.Uint32(),
 		clock:        clock,
@@ -169,33 +175,6 @@ func (s *Structure) visitBuckets(clientIdentifier []byte, fn func(uint32, uint32
 
 func (s *Structure) currentMillis() uint64 {
 	return uint64(s.clock.Now().UnixMilli())
-}
-
-// Validate the input config against invariants
-func validateStructureConfig(config *config.FairnessTrackerConfig) error {
-	if config == nil {
-		return NewDataError(nil, "FairnessTrackerConfig cannot be nil")
-	}
-
-	if config.L <= 0 || config.M <= 0 {
-		return fmt.Errorf("the values of L and M must be at least 1, found L: %d and M: %d", config.L, config.M)
-	}
-
-	if config.Pd <= 0 || config.Pi <= 0 {
-		return fmt.Errorf("the values of Pi and Pd must >0, found Pi: %f and Pd: %f", config.Pi, config.Pd)
-	}
-
-	if config.Pd > 1 || config.Pi >= 1 {
-		return fmt.Errorf("the values of Pi and Pd must <=1, found Pi: %f and Pd: %f", config.Pi, config.Pd)
-	}
-
-	// The expectation is we quickly throttle the client when bad things start to happen
-	// but cautiously bring it back to avoid retry-storms.
-	if config.Pi <= config.Pd {
-		return fmt.Errorf("the value of Pd is expected to be smaller than Pi")
-	}
-
-	return nil
 }
 
 // Calculate n hashes of the given input using murmur hash.
