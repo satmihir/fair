@@ -63,11 +63,15 @@ func (s Saturation) PenalizedFraction() float64 {
 	return float64(penalized) / float64(buckets)
 }
 
-// SharedPenaltyChance estimates the probability that a client with no
-// failures of its own lands on a penalized bucket at every level, which is
-// what it takes to be throttled under MinFinalProbabilityFunction. It is the
-// product of each level's penalized share. Alert on this rising: the tuner
-// aims to keep it at or below 0.0001.
+// SharedPenaltyChance estimates the chance that every bucket selected for a
+// client with no failures of its own is at or above PenalizedThreshold. It is
+// the product of each level's penalized share.
+//
+// It measures how much of the structure is occupied, not how often such a
+// client is rejected. The rejection probability is whatever the buckets hold:
+// with a single bucket at 0.01, this returns 1, yet a client sharing that
+// bucket is throttled 1 time in 100. Alert on it rising: the tuner sizes a
+// structure to keep it at or below 0.0001.
 func (s Saturation) SharedPenaltyChance() float64 {
 	if s.BucketsPerLevel == 0 || len(s.PenalizedByLevel) == 0 {
 		return 0

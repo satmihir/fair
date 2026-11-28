@@ -30,6 +30,7 @@ Version 2 hardens the library for production use. It changes the module path, a 
 
 - **Bucket placement.** Clients are placed with SipHash-2-4 under a secret 128-bit key drawn from `crypto/rand` for every generation, replacing MurmurHash3 with a 32-bit seed. A client that chooses its own identifier can no longer aim it at another client's buckets. Each level's bucket is derived separately from the hash, so two clients share every level about as often as chance allows instead of at a rate near `1/M^2`.
 - **Decay and the clock.** Decay measures elapsed time with the monotonic clock, so a wall-clock step no longer wipes penalties, and time never moves backward within a tracker.
+- **Throttling decision.** A request is throttled when the random draw is below its probability, not at or below it, so a client at probability 0 is never throttled.
 - **Outcomes.** `ReportOutcome` ignores a value other than `OutcomeSuccess` or `OutcomeFailure`. It used to count as a failure.
 - **Custom probability functions.** The result is clamped to `[0, 1]`, and NaN falls back to the smallest bucket probability. NaN used to disable throttling.
 - **Rotation.** A failed rotation keeps the current structures serving and is retried on the next tick; in v1 it ended the process with `log.Fatalf`. `Close` waits for the rotation worker and is safe to call more than once.
@@ -51,4 +52,4 @@ Version 2 hardens the library for production use. It changes the module path, a 
 
 ### Documentation
 
-- The README documents how long a penalty lasts: a client that stays fully throttled is forgotten between one and two rotation periods after its last reported failure, whatever `Lambda` is.
+- The README documents how long a penalty lasts: a client that stays fully throttled has its own failures discarded at the second successful rotation after the last one it reported, whatever `Lambda` is.

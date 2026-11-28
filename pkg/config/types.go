@@ -23,10 +23,13 @@ type FairnessTrackerConfig struct {
 	// disables decay but not forgiveness: rotation still ends a penalty (see
 	// RotationFrequency).
 	Lambda float64
-	// The interval between rotations. It also bounds penalty memory: a client
-	// that stays fully throttled reports no outcomes, so it is forgotten
-	// between one and two intervals after its last reported failure, whatever
-	// Lambda is. See "How long a penalty lasts" in the README.
+	// The interval between rotations. It also bounds how long a client's own
+	// feedback is remembered: a client that stays fully throttled reports no
+	// outcomes, so its failures are discarded at the second successful
+	// rotation after the last one it reported, whatever Lambda is. That is
+	// nominally one to two intervals. It is not a deadline for admission: a
+	// failed rotation delays it, and buckets the client shares with others
+	// can still be penalized. See "How long a penalty lasts" in the README.
 	RotationFrequency time.Duration
 	// Include result stats. Useful for debugging but may slightly affect performance.
 	IncludeStats bool
@@ -40,8 +43,9 @@ type FairnessTrackerConfig struct {
 	// throttling decision. A reader shared by several trackers must be safe
 	// for concurrent use.
 	HashKeySource io.Reader
-	// DecisionSource returns the uniform random number in [0, 1) that each
-	// throttling decision compares with the client's probability. Leave it
+	// DecisionSource returns the uniform random number in [0, 1) behind each
+	// throttling decision: a request is throttled when the number is below
+	// the client's probability, so probability 0 never throttles. Leave it
 	// nil in production to use math/rand's generator. A simulation or test
 	// can supply a seeded source to make decisions reproducible; calling
 	// rand.Seed no longer does that, because it has had no effect since

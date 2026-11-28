@@ -255,7 +255,7 @@ func TestRegisterRequestCallsFinalProbabilityFunction(t *testing.T) {
 	assert.NotNil(t, resp, "expected a non-nil response from RegisterRequest")
 
 	// Verify that the sentinel return value from our custom function is respected
-	// Since rand.Float64() <= 0.999 almost always, ShouldThrottle is very likely true
+	// Since rand.Float64() < 0.999 almost always, ShouldThrottle is very likely true
 	// But we don't assert strict true/false, instead we ensure the returned probability is honored
 	assert.True(t, resp.ShouldThrottle || !resp.ShouldThrottle,
 		"tracker should honor the probability returned by FinalProbabilityFunction")

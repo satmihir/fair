@@ -148,8 +148,10 @@ func (s *Structure) RegisterRequest(_ context.Context, clientIdentifier []byte) 
 		stats.FinalProbability = pFinal
 	}
 
-	// Decide whether to throttle the request based on the probability.
-	shouldThrottle := s.decision() <= pFinal
+	// Throttle when the draw falls below the probability. The draw is in
+	// [0, 1), so the comparison must be strict: probability 0 never throttles
+	// (even on a draw of exactly 0) and probability 1 always does.
+	shouldThrottle := s.decision() < pFinal
 
 	return &request.RegisterRequestResult{
 		ShouldThrottle: shouldThrottle,

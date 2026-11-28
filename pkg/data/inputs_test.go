@@ -122,22 +122,44 @@ func TestNaNFallbackSurvivesCallbackMutation(t *testing.T) {
 	require.True(t, res.ShouldThrottle, "a saturated flow must still be throttled")
 }
 
+// A request is throttled when the draw is below the probability. The draw
+// is in [0, 1), so probability 0 never throttles and probability 1 always does.
 func TestDecisionSourceDrivesThrottling(t *testing.T) {
 	cfg := validStructureConfig()
 	cfg.Pi, cfg.Pd = .5, .25
 	var draw float64
 	cfg.DecisionSource = func() float64 { return draw }
-	s, err := NewStructure(&cfg, 1)
+	s, err := NewStructure(withStats(&cfg), 1)
 	require.NoError(t, err)
-	ctx, id := context.Background(), []byte("client")
-	s.ReportOutcome(ctx, id, request.OutcomeFailure) // Probability 0.5.
+	ctx := context.Background()
 
+	fresh, half, saturated := []byte("fresh"), []byte("half"), []byte("saturated")
+	s.ReportOutcome(ctx, half, request.OutcomeFailure)
+	s.ReportOutcome(ctx, saturated, request.OutcomeFailure)
+	s.ReportOutcome(ctx, saturated, request.OutcomeFailure)
+
+	almostOne := math.Nextafter(1, 0) // The largest draw the source can return.
 	for _, tc := range []struct {
-		draw     float64
-		throttle bool
-	}{{0, true}, {.49, true}, {.5, true}, {.51, false}, {.99, false}} {
+		id          []byte
+		probability float64
+		draw        float64
+		throttle    bool
+	}{
+		{fresh, 0, 0, false},
+		{fresh, 0, .5, false},
+		{half, .5, 0, true},
+		{half, .5, .49, true},
+		{half, .5, .5, false},
+		{half, .5, .51, false},
+		{half, .5, almostOne, false},
+		{saturated, 1, 0, true},
+		{saturated, 1, .5, true},
+		{saturated, 1, almostOne, true},
+	} {
 		draw = tc.draw
-		require.Equalf(t, tc.throttle, s.RegisterRequest(ctx, id).ShouldThrottle, "draw %g", tc.draw)
+		res := s.RegisterRequest(ctx, tc.id)
+		require.Equalf(t, tc.probability, res.ResultStats.FinalProbability, "%s", tc.id)
+		require.Equalf(t, tc.throttle, res.ShouldThrottle, "probability %g, draw %g", tc.probability, tc.draw)
 	}
 }
 

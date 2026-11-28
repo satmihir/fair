@@ -59,8 +59,9 @@ func (bl *FairnessTrackerBuilder) SetIncludeStats(IncludeStats bool) {
 }
 
 // SetRotationFrequency configures how often the internal structures are rotated.
-// A client that stays fully throttled is forgotten between one and two
-// intervals after its last reported failure, whatever the decay rate is.
+// A client that stays fully throttled has its own failures discarded at the
+// second successful rotation after the last one it reported, whatever the
+// decay rate is: nominally one to two intervals.
 func (bl *FairnessTrackerBuilder) SetRotationFrequency(rotationFrequency time.Duration) {
 	bl.configuration.RotationFrequency = rotationFrequency
 }

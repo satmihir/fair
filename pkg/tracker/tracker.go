@@ -136,7 +136,7 @@ func newFairnessTracker(cfg config.FairnessTrackerConfig, source utils.IClock, t
 	//
 	// Each new standby starts empty and learns only from outcomes reported
 	// after this point. A client that stays fully throttled reports none, so
-	// it starts again from zero once that standby is promoted. This is
+	// none of its own failures remain once that standby is promoted. This is
 	// intended: it is how a blocked client recovers when decay is disabled,
 	// and copying penalties into the standby would make a false positive
 	// outlive the rotation meant to clear it.

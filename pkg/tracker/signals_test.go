@@ -174,3 +174,19 @@ func TestSaturationHelpersHandleZeroValue(t *testing.T) {
 	require.Zero(t, s.PenalizedFraction())
 	require.Zero(t, s.SharedPenaltyChance())
 }
+
+// SharedPenaltyChance measures how much of the structure is occupied, not how
+// often a client is rejected. With one bucket holding 0.01, every client
+// selects a penalized bucket, yet each is throttled only 1 time in 100.
+func TestSharedPenaltyChanceIsOccupancyNotRejectionProbability(t *testing.T) {
+	ft, _, _ := signalsTracker(t, func(cfg *config.FairnessTrackerConfig) {
+		cfg.L, cfg.M = 1, 1
+		cfg.Pi, cfg.Pd = .01, .005
+		cfg.IncludeStats = true
+	})
+	ctx := context.Background()
+	ft.ReportOutcome(ctx, []byte("bad"), request.OutcomeFailure)
+
+	require.Equal(t, 1., ft.Saturation().SharedPenaltyChance())
+	require.Equal(t, .01, ft.RegisterRequest(ctx, []byte("someone else")).ResultStats.FinalProbability)
+}
