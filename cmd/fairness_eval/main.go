@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/satmihir/fair/internal/simticker"
 	"github.com/satmihir/fair/pkg/config"
 	"github.com/satmihir/fair/pkg/request"
 	"github.com/satmihir/fair/pkg/tracker"
@@ -32,6 +33,7 @@ type scenario struct {
 	name              string
 	description       string
 	duration          time.Duration
+	rotationPeriod    time.Duration // Nonpositive disables scheduled tracker rotations.
 	capacityPerSecond float64
 	burstTokens       float64
 	classes           []workloadClass
@@ -49,6 +51,7 @@ type event struct {
 
 type runResult struct {
 	mode                  string
+	rotations             int
 	successes             []float64
 	requests              []float64
 	throttled             int
@@ -84,21 +87,6 @@ func (c *simClock) Sleep(duration time.Duration) {
 
 func (c *simClock) set(now time.Duration) {
 	c.now = now
-}
-
-type stoppedTicker struct {
-	ch chan time.Time
-}
-
-func newStoppedTicker() *stoppedTicker {
-	return &stoppedTicker{ch: make(chan time.Time)}
-}
-
-func (t *stoppedTicker) C() <-chan time.Time {
-	return t.ch
-}
-
-func (t *stoppedTicker) Stop() {
 }
 
 type tokenBucket struct {
@@ -267,6 +255,7 @@ func runScenarioWithVariant(
 
 	var trk *tracker.FairnessTracker
 	var clock *simClock
+	var ticker *simticker.Ticker
 	if useFair {
 		result.mode = "with FAIR"
 		clock = &simClock{base: time.Unix(0, 0)}
@@ -282,15 +271,32 @@ func runScenarioWithVariant(
 		conf.Lambda = variant.lambda
 		conf.FinalProbabilityFunction = variant.finalProbabilityFunction
 		conf.RotationFrequency = sc.duration + time.Minute
+		if sc.rotationPeriod > 0 {
+			conf.RotationFrequency = sc.rotationPeriod
+		}
+		ticker = simticker.New()
 
 		//nolint:staticcheck // The tracker uses math/rand's package global; seed it so this experiment is reproducible.
 		rand.Seed(seed)
-		trackerInstance, err := tracker.NewFairnessTrackerWithClockAndTicker(conf, clock, newStoppedTicker())
+		trackerInstance, err := tracker.NewFairnessTrackerWithClockAndTicker(conf, clock, ticker)
 		if err != nil {
 			return runResult{}, err
 		}
 		defer trackerInstance.Close()
 		trk = trackerInstance
+	}
+
+	var lastRotation time.Duration
+	rotateThrough := func(at time.Duration) error {
+		at = min(at, sc.duration)
+		for at-lastRotation >= sc.rotationPeriod {
+			lastRotation += sc.rotationPeriod
+			clock.set(lastRotation)
+			if err := ticker.Rotate(trk, clock.Now()); err != nil {
+				return fmt.Errorf("rotate at %s: %w", lastRotation, err)
+			}
+		}
+		return nil
 	}
 
 	ctx := context.Background()
@@ -299,6 +305,11 @@ func runScenarioWithVariant(
 		result.requests[ev.clientIndex]++
 
 		if useFair {
+			if sc.rotationPeriod > 0 {
+				if err := rotateThrough(ev.at); err != nil {
+					return runResult{}, err
+				}
+			}
 			clock.set(ev.at)
 			decision := trk.RegisterRequest(ctx, []byte(cl.id))
 			if decision.ShouldThrottle {
@@ -320,6 +331,13 @@ func runScenarioWithVariant(
 		if useFair {
 			trk.ReportOutcome(ctx, []byte(cl.id), request.OutcomeFailure)
 		}
+	}
+
+	if useFair && sc.rotationPeriod > 0 {
+		if err := rotateThrough(sc.duration); err != nil {
+			return runResult{}, err
+		}
+		result.rotations = int(trk.RotationStatus().Rotations)
 	}
 
 	result.rawJain = jain(result.successes)
