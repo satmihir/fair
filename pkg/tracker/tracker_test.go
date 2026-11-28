@@ -3,6 +3,7 @@ package tracker
 import (
 	"context"
 	"fmt"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -62,12 +63,9 @@ func TestRotationUsesConfigSnapshot(t *testing.T) {
 	cfg.FinalProbabilityFunction = func([]float64) float64 { return 0.75 }
 	// After two ticks, the structure created on the first tick is serving requests.
 	for mainID := uint64(2); mainID <= 3; mainID++ {
-		ticker.ch <- time.Now()
-		require.Eventually(t, func() bool {
-			trk.rotationLock.RLock()
-			defer trk.rotationLock.RUnlock()
-			return trk.mainStructure.GetID() == mainID && trk.secondaryStructure.GetID() == mainID+1
-		}, time.Second, time.Millisecond)
+		ticker.tickAndWait(t, trk)
+		require.Equal(t, mainID, trk.mainStructure.GetID())
+		require.Equal(t, mainID+1, trk.secondaryStructure.GetID())
 		resp := trk.RegisterRequest(context.Background(), []byte("client"))
 		require.NotNil(t, resp.ResultStats)
 		require.Equal(t, 0.25, resp.ResultStats.FinalProbability)
@@ -101,8 +99,8 @@ func TestNewFairnessTrackerWithClockAndTicker_NilConfig(t *testing.T) {
 }
 
 type fakeTicker struct {
-	ch      chan time.Time
-	stopped bool
+	ch    chan time.Time
+	stops atomic.Int32
 }
 
 func newFakeTicker() *fakeTicker {
@@ -116,7 +114,26 @@ func (f *fakeTicker) C() <-chan time.Time {
 }
 
 func (f *fakeTicker) Stop() {
-	f.stopped = true
+	f.stops.Add(1)
+}
+
+// This single-driver ticker has no automatic ticks. A change in either
+// counter acknowledges exactly the attempt we triggered, including failure.
+func (f *fakeTicker) tickAndWait(tb testing.TB, ft *FairnessTracker) {
+	tb.Helper()
+	before := ft.RotationStatus()
+	f.ch <- time.Time{}
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		after := ft.RotationStatus()
+		if after.Rotations != before.Rotations || after.Failures != before.Failures {
+			return
+		}
+		if time.Now().After(deadline) {
+			tb.Fatal("tick was not processed")
+		}
+		time.Sleep(time.Millisecond)
+	}
 }
 
 type fakeTracker struct {
@@ -149,7 +166,7 @@ func TestNewFairnessTrackerWithClockAndTicker_FirstStructureError(t *testing.T) 
 
 	ticker := newFakeTicker()
 	ft, err := NewFairnessTrackerWithClockAndTicker(config.DefaultFairnessTrackerConfig(), utils.NewRealClock(), ticker)
-	require.False(t, ticker.stopped, "caller retains the ticker on failure")
+	require.Zero(t, ticker.stops.Load(), "caller retains the ticker on failure")
 	require.Nil(t, ft)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Failed to create a structure")
@@ -172,7 +189,7 @@ func TestNewFairnessTrackerWithClockAndTicker_SecondStructureError(t *testing.T)
 
 	ticker := newFakeTicker()
 	ft, err := NewFairnessTrackerWithClockAndTicker(config.DefaultFairnessTrackerConfig(), utils.NewRealClock(), ticker)
-	require.False(t, ticker.stopped, "caller retains the ticker on failure")
+	require.Zero(t, ticker.stops.Load(), "caller retains the ticker on failure")
 	require.Nil(t, ft)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Failed to create a structure")
@@ -216,28 +233,83 @@ func TestRotationRecoversAfterStructureError(t *testing.T) {
 	}
 	checkIDs(1, 2)
 	status := ft.RotationStatus()
+	require.Zero(t, status.Rotations)
 	require.Zero(t, status.Failures)
 	require.NoError(t, status.LastError)
 	ft.ReportOutcome(ctx, client, request.OutcomeFailure)
 	checkProbability(0.25)
 
-	ticker.ch <- time.Now()
-	require.Eventually(t, func() bool { return ft.RotationStatus().Failures != 0 }, time.Second, time.Millisecond)
+	ticker.tickAndWait(t, ft)
 	status = ft.RotationStatus()
 	require.Equal(t, uint64(1), status.Failures)
+	require.Zero(t, status.Rotations)
 	require.ErrorContains(t, status.LastError, errRotation.Error())
 	checkIDs(1, 2)
 	checkProbability(0.25)
 	ft.ReportOutcome(ctx, client, request.OutcomeFailure)
 	checkProbability(0.5)
 
-	ticker.ch <- time.Now()
-	require.Eventually(t, func() bool { return ft.RotationStatus().LastError == nil }, time.Second, time.Millisecond)
+	ticker.tickAndWait(t, ft)
 	status = ft.RotationStatus()
 	require.Equal(t, uint64(1), status.Failures)
+	require.Equal(t, uint64(1), status.Rotations)
 	require.NoError(t, status.LastError)
 	checkIDs(2, 3) // Promote the warm standby and reuse the failed candidate's ID.
 	checkProbability(0.5)
+}
+
+func TestConcurrentCloseJoinsInFlightRotation(t *testing.T) {
+	newStructure := newTrackerStructureWithClock
+	t.Cleanup(func() { newTrackerStructureWithClock = newStructure })
+	entered, release, finished := make(chan struct{}), make(chan struct{}), make(chan struct{})
+	newTrackerStructureWithClock = func(cfg *config.FairnessTrackerConfig, id uint64, stats bool, clock utils.IClock) (request.Tracker, error) {
+		if id == 3 {
+			close(entered)
+			<-release
+			defer close(finished)
+		}
+		return newStructure(cfg, id, stats, clock)
+	}
+
+	cfg := config.DefaultFairnessTrackerConfig()
+	cfg.IncludeStats, cfg.Lambda, cfg.Pi = true, 0, 0.25
+	ticker := newFakeTicker()
+	ft, err := NewFairnessTrackerWithClockAndTicker(cfg, utils.NewRealClock(), ticker)
+	require.NoError(t, err)
+	ticker.ch <- time.Time{}
+	<-entered
+
+	const callers = 8
+	started, joined := make(chan struct{}, callers), make(chan bool, callers)
+	for i := 0; i < callers; i++ {
+		go func() {
+			started <- struct{}{}
+			ft.Close()
+			select {
+			case <-finished:
+				joined <- true
+			default:
+				joined <- false
+			}
+		}()
+	}
+	for i := 0; i < callers; i++ {
+		<-started
+	}
+	<-ft.stopRotation // Shutdown has begun while the constructor is still blocked.
+	close(release)
+	for i := 0; i < callers; i++ {
+		assert.True(t, <-joined, "Close returned before rotation finished")
+	}
+	ft.Close()
+	require.Equal(t, int32(1), ticker.stops.Load())
+
+	// Close stops rotation, not request tracking.
+	ctx, id := context.Background(), []byte("client")
+	ft.ReportOutcome(ctx, id, request.OutcomeFailure)
+	stats := ft.RegisterRequest(ctx, id).ResultStats
+	require.NotNil(t, stats)
+	require.Equal(t, 0.25, stats.FinalProbability)
 }
 
 func TestNewFairnessTrackerRejectsInvalidRotationFrequency(t *testing.T) {
