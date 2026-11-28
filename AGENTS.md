@@ -33,7 +33,7 @@ You must use the following commands to build, test, and verify your work.
 ### Build and Test
 
 - **Generate Protobufs**: `make proto`
-    - Run this if you modify any `.proto` files in `pkg/serialization`.
+    - Run this with protoc 3.20.3 and protoc-gen-go v1.36.10 if you modify `pkg/serialization/v1.proto`. On Linux x86_64, `bash .github/scripts/verify-proto.sh` reproduces CI's pinned, byte-for-byte check without modifying the source tree.
 - **Build**: `make build`
     - Compiles the project.
 - **Test**: `make test`
