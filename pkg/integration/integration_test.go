@@ -1,104 +1,96 @@
-package integration
+package integration_test
 
 import (
 	"context"
-	"fmt"
-	"sync"
-	"sync/atomic"
+	"math/rand"
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
+	"github.com/satmihir/fair/internal/simticker"
+	"github.com/satmihir/fair/pkg/config"
 	"github.com/satmihir/fair/pkg/request"
 	"github.com/satmihir/fair/pkg/tracker"
 )
 
-var errNoTokens = fmt.Errorf("no tokens left")
+type clock struct{ now time.Time }
 
-type TokenBucket struct {
-	tokens                float64
-	tokensPerSecond       float64
-	lastUpdatedTimeMillis uint64
+func (c *clock) Now() time.Time        { return c.now }
+func (c *clock) Sleep(d time.Duration) { c.now = c.now.Add(d) }
 
-	lk sync.Mutex
-}
+type counts struct{ served, failed, throttled int }
 
-func NewTokenBucket(initialTokens uint32, tokensPerSecond float64) *TokenBucket {
-	return &TokenBucket{
-		tokens:                float64(initialTokens),
-		tokensPerSecond:       tokensPerSecond,
-		lastUpdatedTimeMillis: uint64(time.Now().UnixMilli()),
+func TestEnforcedNoisyNeighbor(t *testing.T) {
+	// The public tracker uses the global RNG for hash seeds and admission.
+	//nolint:staticcheck // Reproduce the same workload in this serial test.
+	rand.Seed(9)
+	c := &clock{now: time.Unix(100, 0)}
+	ticker := simticker.New()
+	cfg := &config.FairnessTrackerConfig{
+		L: 4, M: 128, Pi: 1, Pd: 0.25,
+		// Disable decay to distinguish rotation-based recovery from aging.
+		Lambda: 0, FinalProbabilityFunction: config.MinFinalProbabilityFunction,
 	}
-}
+	trk, err := tracker.NewFairnessTrackerWithClockAndTicker(cfg, c, ticker)
+	require.NoError(t, err)
+	t.Cleanup(trk.Close)
 
-func (tb *TokenBucket) Take() error {
-	tb.lk.Lock()
-	defer tb.lk.Unlock()
-
-	now := uint64(time.Now().UnixMilli())
-	diff := now - tb.lastUpdatedTimeMillis
-	tb.tokens += tb.tokensPerSecond * float64(diff) / 1000
-	tb.lastUpdatedTimeMillis = now
-
-	if tb.tokens >= 1 {
-		tb.tokens--
-		return nil
-	}
-
-	return errNoTokens
-}
-
-func TestIntegration(t *testing.T) {
-	tb := NewTokenBucket(10, 1)
-
+	// Model a downstream API with a fixed-window quota of four writes/second.
+	// Only forwarded calls consume quota or produce feedback for the tracker.
+	const capacity = 4
+	remaining := capacity
 	ctx := context.Background()
-
-	trkB := tracker.NewFairnessTrackerBuilder()
-	trkB.SetRotationFrequency(1 * time.Second)
-
-	trk, err := trkB.Build()
-	assert.NoError(t, err)
-	defer trk.Close()
-
-	var twoHundred atomic.Uint32
-	var fourTwentyNine atomic.Uint32
-	var throttles atomic.Uint32
-
-	wg := &sync.WaitGroup{}
-
-	for i := 0; i < 10; i++ {
-		wg.Add(1)
-
-		go func() {
-			defer wg.Done()
-
-			client := fmt.Sprintf("cl-%d", i)
-
-			for j := 0; j < 100; j++ {
-				res := trk.RegisterRequest(ctx, []byte(client))
-
-				if res.ShouldThrottle {
-					throttles.Add(1)
-				}
-
-				if err := tb.Take(); err != nil {
-					fourTwentyNine.Add(1)
-					trk.ReportOutcome(ctx, []byte(client), request.OutcomeFailure)
-				} else {
-					twoHundred.Add(1)
-					trk.ReportOutcome(ctx, []byte(client), request.OutcomeSuccess)
-					assert.NoError(t, err)
-				}
-
-				time.Sleep(25 * time.Millisecond)
+	run := func(client string, offered int) counts {
+		var n counts
+		id := []byte(client)
+		for i := 0; i < offered; i++ {
+			if trk.RegisterRequest(ctx, id).ShouldThrottle {
+				n.throttled++
+				continue
 			}
-		}()
+			if remaining == 0 {
+				n.failed++
+				trk.ReportOutcome(ctx, id, request.OutcomeFailure)
+			} else {
+				remaining--
+				n.served++
+				trk.ReportOutcome(ctx, id, request.OutcomeSuccess)
+			}
+		}
+		return n
+	}
+	nextWindow := func() {
+		c.Sleep(time.Second)
+		remaining = capacity
 	}
 
-	wg.Wait()
+	// A batch client bursts just before the quota resets.
+	require.Equal(t, counts{served: 1}, run("interactive-a", 1))
+	require.Equal(t, counts{served: 1}, run("interactive-b", 1))
+	require.Equal(t, counts{served: 2, failed: 1, throttled: 13}, run("batch", 16))
 
-	assert.Greater(t, int(twoHundred.Load()), 0)
-	assert.Greater(t, int(fourTwentyNine.Load()), 0)
-	assert.Greater(t, int(throttles.Load()), 0)
+	// Batch retries arrive first in every subsequent window. Enforcing the
+	// decision must protect both interactive clients, even immediately after
+	// promotion of the warm standby. Load shedding must not idle the backend.
+	for window := 1; window <= 8; window++ {
+		nextWindow()
+		if window == 5 {
+			require.NoError(t, ticker.Rotate(trk, c.Now()))
+		}
+		require.Equal(t, counts{throttled: 16}, run("batch", 16), "window %d", window)
+		for _, id := range []string{"interactive-a", "interactive-b"} {
+			require.Equal(t, counts{served: 2}, run(id, 2), "%s in window %d", id, window)
+		}
+		require.Zero(t, remaining, "unused backend capacity in window %d", window)
+	}
+
+	// After another rotation, the original burst's failure is no longer in
+	// either active window. A right-sized batch can use its share again.
+	nextWindow()
+	require.NoError(t, ticker.Rotate(trk, c.Now()))
+	require.Equal(t, counts{served: 2}, run("batch", 2))
+	require.Equal(t, counts{served: 1}, run("interactive-a", 1))
+	require.Equal(t, counts{served: 1}, run("interactive-b", 1))
+	require.Zero(t, remaining, "unused backend capacity after recovery")
 }
