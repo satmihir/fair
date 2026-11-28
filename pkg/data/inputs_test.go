@@ -124,6 +124,8 @@ func TestNaNFallbackSurvivesCallbackMutation(t *testing.T) {
 
 // A request is throttled when the draw is below the probability. The draw
 // is in [0, 1), so probability 0 never throttles and probability 1 always does.
+// One client is stepped through the three probabilities: with several clients
+// under a random key, two could share a bucket and change the expected value.
 func TestDecisionSourceDrivesThrottling(t *testing.T) {
 	cfg := validStructureConfig()
 	cfg.Pi, cfg.Pd = .5, .25
@@ -131,35 +133,28 @@ func TestDecisionSourceDrivesThrottling(t *testing.T) {
 	cfg.DecisionSource = func() float64 { return draw }
 	s, err := NewStructure(withStats(&cfg), 1)
 	require.NoError(t, err)
-	ctx := context.Background()
-
-	fresh, half, saturated := []byte("fresh"), []byte("half"), []byte("saturated")
-	s.ReportOutcome(ctx, half, request.OutcomeFailure)
-	s.ReportOutcome(ctx, saturated, request.OutcomeFailure)
-	s.ReportOutcome(ctx, saturated, request.OutcomeFailure)
+	ctx, id := context.Background(), []byte("client")
 
 	almostOne := math.Nextafter(1, 0) // The largest draw the source can return.
-	for _, tc := range []struct {
-		id          []byte
+	type decision struct {
+		draw     float64
+		throttle bool
+	}
+	for _, step := range []struct {
 		probability float64
-		draw        float64
-		throttle    bool
+		decisions   []decision
 	}{
-		{fresh, 0, 0, false},
-		{fresh, 0, .5, false},
-		{half, .5, 0, true},
-		{half, .5, .49, true},
-		{half, .5, .5, false},
-		{half, .5, .51, false},
-		{half, .5, almostOne, false},
-		{saturated, 1, 0, true},
-		{saturated, 1, .5, true},
-		{saturated, 1, almostOne, true},
+		{0, []decision{{0, false}, {.5, false}, {almostOne, false}}},
+		{.5, []decision{{0, true}, {.49, true}, {.5, false}, {.51, false}, {almostOne, false}}},
+		{1, []decision{{0, true}, {.5, true}, {almostOne, true}}},
 	} {
-		draw = tc.draw
-		res := s.RegisterRequest(ctx, tc.id)
-		require.Equalf(t, tc.probability, res.ResultStats.FinalProbability, "%s", tc.id)
-		require.Equalf(t, tc.throttle, res.ShouldThrottle, "probability %g, draw %g", tc.probability, tc.draw)
+		for _, d := range step.decisions {
+			draw = d.draw
+			res := s.RegisterRequest(ctx, id)
+			require.Equal(t, step.probability, res.ResultStats.FinalProbability)
+			require.Equalf(t, d.throttle, res.ShouldThrottle, "probability %g, draw %g", step.probability, d.draw)
+		}
+		s.ReportOutcome(ctx, id, request.OutcomeFailure) // Raise the probability by 0.5.
 	}
 }
 
