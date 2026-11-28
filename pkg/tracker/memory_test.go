@@ -3,7 +3,6 @@ package tracker
 import (
 	"runtime"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -67,24 +66,11 @@ func BenchmarkAtLimitRotation(b *testing.B) {
 		runtime.ReadMemStats(&before)
 		ft, err := NewFairnessTrackerWithClockAndTicker(cfg, utils.NewRealClock(), ticker)
 		require.NoError(b, err)
-		ticker.ch <- time.Now()
-		// Sending a tick does not mean the replacement has been published yet.
-		deadline := time.Now().Add(10 * time.Second)
-		for {
-			ft.rotationLock.RLock()
-			rotated := ft.mainStructure.GetID() == 2 && ft.secondaryStructure.GetID() == 3
-			ft.rotationLock.RUnlock()
-			if rotated {
-				break
-			}
-			if time.Now().After(deadline) {
-				ft.Close()
-				b.Fatal("tracker did not rotate")
-			}
-			time.Sleep(time.Millisecond)
-		}
+		ticker.tickAndWait(b, ft)
 		runtime.ReadMemStats(&after)
 		ft.Close()
+		require.Equal(b, uint64(2), ft.mainStructure.GetID())
+		require.Equal(b, uint64(3), ft.secondaryStructure.GetID())
 		if allocated := after.TotalAlloc - before.TotalAlloc; allocated > budget {
 			b.Fatalf("construction and rotation allocated %d bytes; budget is %d", allocated, budget)
 		}

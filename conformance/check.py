@@ -13,7 +13,10 @@ def check(binary):
     steps = [("register", 0), ("failure", None), ("failure", None), ("register", .5),
              ("rotate", None), ("register", .5), ("success", None), ("register", .375),
              ("failure", None), ("register", .625), ("rotate", None), ("register", .25),
-             ("rotate", None), ("register", 0)]
+             ("rotate", None), ("register", 0),
+             # Consecutive rotations must finish independently: the first
+             # promotes the client penalty and the second discards it.
+             ("failure", None), ("rotate", None), ("rotate", None), ("register", 0)]
     inputs = [{"op": op} if op == "rotate" else {"op": op, "client": "noisy"} for op, _ in steps]
     result = subprocess.run([binary], input="".join(json.dumps(x) + "\n" for x in inputs),
                             stdout=subprocess.PIPE, text=True, timeout=10, check=True)
