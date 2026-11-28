@@ -64,10 +64,9 @@ func (ft *FairnessTracker) RotationStatus() RotationStatus {
 var newTrackerStructureWithClock = func(
 	trackerConfig *config.FairnessTrackerConfig,
 	id uint64,
-	includeStats bool,
 	clock utils.IClock,
 ) (request.Tracker, error) {
-	return data.NewStructureWithClock(trackerConfig, id, includeStats, clock)
+	return data.NewStructureWithClock(trackerConfig, id, clock)
 }
 
 // NewFairnessTrackerWithClockAndTicker creates a FairnessTracker using the
@@ -95,13 +94,13 @@ func newFairnessTracker(cfg config.FairnessTrackerConfig, source utils.IClock, t
 	// Every generation shares one never-decreasing view of time.
 	clock := newHighWaterClock(source)
 	newStructure := newTrackerStructureWithClock
-	st1, err := newStructure(&cfg, 1, cfg.IncludeStats, clock)
+	st1, err := newStructure(&cfg, 1, clock)
 	if err != nil {
 		logger.Printf("error in creating first tracker : %v", err)
 		return nil, NewFairnessTrackerError(err, "Failed to create a structure")
 	}
 
-	st2, err := newStructure(&cfg, 2, cfg.IncludeStats, clock)
+	st2, err := newStructure(&cfg, 2, clock)
 	if err != nil {
 		st1.Close()
 		logger.Printf("error in creating second tracker : %v", err)
@@ -150,7 +149,7 @@ func newFairnessTracker(cfg config.FairnessTrackerConfig, source utils.IClock, t
 					return
 				default:
 				}
-				s, err := newStructure(&cfg, ft.structureIDCounter, cfg.IncludeStats, clock)
+				s, err := newStructure(&cfg, ft.structureIDCounter, clock)
 				if err != nil {
 					ft.rotationLock.Lock()
 					ft.rotationStatus.Failures++

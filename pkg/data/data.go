@@ -57,7 +57,8 @@ type Structure struct {
 
 // NewStructureWithClock creates a Structure using the provided clock. This is
 // primarily used in tests and simulations where time needs to be controlled.
-func NewStructureWithClock(input *config.FairnessTrackerConfig, id uint64, includeStats bool, clock utils.IClock) (*Structure, error) {
+// Per-request stats are included when the config's IncludeStats is set.
+func NewStructureWithClock(input *config.FairnessTrackerConfig, id uint64, clock utils.IClock) (*Structure, error) {
 	if input == nil {
 		return nil, NewDataError(nil, "FairnessTrackerConfig cannot be nil")
 	}
@@ -90,13 +91,13 @@ func NewStructureWithClock(input *config.FairnessTrackerConfig, id uint64, inclu
 		hashKey:      hashKey,
 		clock:        clock,
 		epoch:        clock.Now(),
-		includeStats: includeStats,
+		includeStats: cfg.IncludeStats,
 	}, nil
 }
 
 // NewStructure creates a Structure using the real system clock.
-func NewStructure(config *config.FairnessTrackerConfig, id uint64, includeStats bool) (*Structure, error) {
-	return NewStructureWithClock(config, id, includeStats, utils.NewRealClock())
+func NewStructure(config *config.FairnessTrackerConfig, id uint64) (*Structure, error) {
+	return NewStructureWithClock(config, id, utils.NewRealClock())
 }
 
 // GetID returns the identifier of this data structure.

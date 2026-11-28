@@ -15,7 +15,7 @@ import (
 func TestReportOutcomeIgnoresUnknownOutcome(t *testing.T) {
 	cfg := validStructureConfig()
 	cfg.Pi, cfg.Pd = .5, .25
-	s, err := NewStructure(&cfg, 1, true)
+	s, err := NewStructure(withStats(&cfg), 1)
 	require.NoError(t, err)
 	ctx, id := context.Background(), []byte("client")
 	probability := func() float64 { return s.RegisterRequest(ctx, id).ResultStats.FinalProbability }
@@ -45,7 +45,7 @@ func TestFinalProbabilityIsSanitized(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			cfg := validStructureConfig() // Pi is 1: one failure saturates the buckets.
 			cfg.FinalProbabilityFunction = func([]float64) float64 { return tc.returned }
-			s, err := NewStructure(&cfg, 1, true)
+			s, err := NewStructure(withStats(&cfg), 1)
 			require.NoError(t, err)
 			ctx, id := context.Background(), []byte("client")
 			s.ReportOutcome(ctx, id, request.OutcomeFailure)
@@ -93,7 +93,7 @@ func TestDecayIgnoresWallClockStep(t *testing.T) {
 	cfg := validStructureConfig()
 	cfg.Lambda = math.Ln2 // Half-life of one second.
 	clock := &instantClock{now: base}
-	s, err := NewStructureWithClock(&cfg, 1, true, clock)
+	s, err := NewStructureWithClock(withStats(&cfg), 1, clock)
 	require.NoError(t, err)
 	ctx, id := context.Background(), []byte("client")
 	s.ReportOutcome(ctx, id, request.OutcomeFailure)
@@ -112,7 +112,7 @@ func TestNaNFallbackSurvivesCallbackMutation(t *testing.T) {
 		buckets[0] = math.NaN()
 		return math.NaN()
 	}
-	s, err := NewStructure(&cfg, 1, true)
+	s, err := NewStructure(withStats(&cfg), 1)
 	require.NoError(t, err)
 	ctx, id := context.Background(), []byte("client")
 	s.ReportOutcome(ctx, id, request.OutcomeFailure)

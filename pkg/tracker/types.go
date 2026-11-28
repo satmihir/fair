@@ -1,6 +1,7 @@
 package tracker
 
 import (
+	"io"
 	"time"
 
 	"github.com/satmihir/fair/pkg/config"
@@ -20,20 +21,8 @@ func NewFairnessTrackerBuilder() *FairnessTrackerBuilder {
 	}
 }
 
-// BuildWithDefaultConfig builds a tracker using DefaultFairnessTrackerConfig.
-func (bl *FairnessTrackerBuilder) BuildWithDefaultConfig() (*FairnessTracker, error) {
-	return NewFairnessTracker(config.DefaultFairnessTrackerConfig())
-}
-
-// BuildWithConfig builds a tracker using the supplied configuration.
-func (bl *FairnessTrackerBuilder) BuildWithConfig(configuration *config.FairnessTrackerConfig) (*FairnessTracker, error) {
-	if configuration == nil {
-		return nil, NewFairnessTrackerError(nil, "Configuration cannot be nil")
-	}
-	return NewFairnessTracker(configuration)
-}
-
 // Build constructs a tracker using the configuration accumulated on the builder.
+// To build from a complete configuration instead, pass it to NewFairnessTracker.
 func (bl *FairnessTrackerBuilder) Build() (*FairnessTracker, error) {
 	return NewFairnessTracker(bl.configuration)
 }
@@ -80,6 +69,13 @@ func (bl *FairnessTrackerBuilder) SetRotationFrequency(rotationFrequency time.Du
 // throttling probability from all buckets.
 func (bl *FairnessTrackerBuilder) SetFinalProbabilityFunction(finalProbabilityFunction config.FinalProbabilityFunction) {
 	bl.configuration.FinalProbabilityFunction = finalProbabilityFunction
+}
+
+// SetHashKeySource sets the reader that supplies bucket placement keys. Leave
+// it unset in production so keys come from crypto/rand; a simulation can pass
+// a seeded reader to make placement reproducible.
+func (bl *FairnessTrackerBuilder) SetHashKeySource(source io.Reader) {
+	bl.configuration.HashKeySource = source
 }
 
 // FairnessTrackerError is returned when the tracker encounters a recoverable

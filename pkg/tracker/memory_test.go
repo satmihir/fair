@@ -16,12 +16,12 @@ func TestOverBudgetConstructors(t *testing.T) {
 	cfg.L, cfg.M = 3, 130000
 
 	t.Run("NewStructure", func(t *testing.T) {
-		s, err := data.NewStructure(cfg, 1, false)
+		s, err := data.NewStructure(cfg, 1)
 		require.Error(t, err)
 		require.Nil(t, s)
 	})
 	t.Run("NewStructureWithClock", func(t *testing.T) {
-		s, err := data.NewStructureWithClock(cfg, 1, false, utils.NewRealClock())
+		s, err := data.NewStructureWithClock(cfg, 1, utils.NewRealClock())
 		require.Error(t, err)
 		require.Nil(t, s)
 	})

@@ -77,7 +77,7 @@ func hashTestStructure(t *testing.T, levels, buckets uint32, keys *rand.Rand) *S
 	t.Helper()
 	cfg := hashTestConfig(levels, buckets)
 	cfg.HashKeySource = keys
-	s, err := NewStructure(&cfg, 1, true)
+	s, err := NewStructure(withStats(&cfg), 1)
 	require.NoError(t, err)
 	return s
 }
@@ -182,7 +182,7 @@ func TestFreshKeysComeFromCryptoRand(t *testing.T) {
 	require.Nil(t, cfg.HashKeySource)
 	seen := make(map[[2]uint64]bool)
 	for i := 0; i < 32; i++ {
-		s, err := NewStructure(&cfg, 1, true)
+		s, err := NewStructure(withStats(&cfg), 1)
 		require.NoError(t, err)
 		require.NotEqual(t, [2]uint64{}, s.hashKey)
 		require.False(t, seen[s.hashKey], "a 128-bit key repeated")
@@ -197,7 +197,7 @@ func TestFreshKeysIgnoreGlobalMathRandSeed(t *testing.T) {
 	draw := func() [2]uint64 {
 		//nolint:staticcheck // Deliberately pin the generator the keys must not use.
 		rand.Seed(1)
-		s, err := NewStructure(&cfg, 1, true)
+		s, err := NewStructure(withStats(&cfg), 1)
 		require.NoError(t, err)
 		return s.hashKey
 	}
@@ -213,7 +213,7 @@ func TestInjectedKeySourceIsReadSixteenBytesAtATime(t *testing.T) {
 	// A reader that returns one byte per call must still fill the key.
 	cfg := hashTestConfig(4, 4096)
 	cfg.HashKeySource = iotest.OneByteReader(fixedKeys(4))
-	slow, err := NewStructure(&cfg, 1, true)
+	slow, err := NewStructure(withStats(&cfg), 1)
 	require.NoError(t, err)
 	require.Equal(t, first.hashKey, slow.hashKey)
 }
@@ -227,7 +227,7 @@ func TestKeyGenerationFailureFailsConstruction(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			cfg := hashTestConfig(4, 4096)
 			cfg.HashKeySource = source
-			s, err := NewStructure(&cfg, 1, true)
+			s, err := NewStructure(withStats(&cfg), 1)
 			require.Nil(t, s)
 			var dataErr *DataError
 			require.ErrorAs(t, err, &dataErr)

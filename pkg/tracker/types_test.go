@@ -3,6 +3,7 @@ package tracker
 import (
 	"context"
 	"fmt"
+	"math/rand"
 	"testing"
 	"time"
 
@@ -40,11 +41,10 @@ func TestBuildFairnessTracker(t *testing.T) {
 		"rotation frequency should match the value set via builder")
 }
 
-func TestBuildWithConfig(t *testing.T) {
+func TestNewFairnessTrackerWithTunedConfig(t *testing.T) {
 	c, err := config.GenerateTunedStructureConfig(10, 10, 10)
 	assert.NoError(t, err)
-	b := NewFairnessTrackerBuilder()
-	tr, err := b.BuildWithConfig(c)
+	tr, err := NewFairnessTracker(c)
 	require.NoError(t, err)
 	t.Cleanup(tr.Close)
 	assert.Equal(t, int(tr.trackerConfig.L), 4)
@@ -71,4 +71,17 @@ func TestBuilderReusePreservesTrackerConfig(t *testing.T) {
 	require.NotNil(t, secondStats)
 	require.Equal(t, 0.25, firstStats.FinalProbability)
 	require.Equal(t, 0.75, secondStats.FinalProbability)
+}
+
+func TestBuilderSetHashKeySource(t *testing.T) {
+	placement := func() []int {
+		b := NewFairnessTrackerBuilder()
+		b.SetIncludeStats(true)
+		b.SetHashKeySource(rand.New(rand.NewSource(11)))
+		tr, err := b.Build()
+		require.NoError(t, err)
+		defer tr.Close()
+		return tr.RegisterRequest(context.Background(), []byte("client")).ResultStats.BucketIndexes
+	}
+	require.Equal(t, placement(), placement(), "a seeded key source must fix placement")
 }

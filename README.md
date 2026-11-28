@@ -94,9 +94,7 @@ conf, err := config.GenerateTunedStructureConfig(1000, 1000, 25)
 if err != nil {
     log.Fatal(err)
 }
-trkB := tracker.NewFairnessTrackerBuilder()
-
-trk, err := trkB.BuildWithConfig(conf)
+trk, err := tracker.NewFairnessTracker(conf)
 if err != nil {
     log.Fatal(err)
 }

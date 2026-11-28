@@ -15,6 +15,12 @@ import (
 	"github.com/satmihir/fair/pkg/utils"
 )
 
+// withStats turns on per-request stats for a test that reads them.
+func withStats(cfg *config.FairnessTrackerConfig) *config.FairnessTrackerConfig {
+	cfg.IncludeStats = true
+	return cfg
+}
+
 func validStructureConfig() config.FairnessTrackerConfig {
 	return config.FairnessTrackerConfig{
 		L: 2, M: 24, Pi: 1, Pd: .25,
@@ -38,7 +44,7 @@ func TestNewStructureFailsValidation(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			cfg := validStructureConfig()
 			mutate(&cfg)
-			s, err := NewStructure(&cfg, 1, false)
+			s, err := NewStructure(&cfg, 1)
 			require.IsType(t, &DataError{}, err)
 			require.Nil(t, s)
 		})
@@ -48,7 +54,7 @@ func TestNewStructureFailsValidation(t *testing.T) {
 func TestNewStructureRejectsNilClocks(t *testing.T) {
 	cfg := validStructureConfig()
 	for _, clock := range []utils.IClock{nil, (*utils.Clock)(nil)} {
-		s, err := NewStructureWithClock(&cfg, 1, false, clock)
+		s, err := NewStructureWithClock(&cfg, 1, clock)
 		require.IsType(t, &DataError{}, err)
 		require.Nil(t, s)
 	}
@@ -56,7 +62,7 @@ func TestNewStructureRejectsNilClocks(t *testing.T) {
 
 func TestNewStructureSnapshotsConfig(t *testing.T) {
 	cfg := validStructureConfig()
-	s, err := NewStructure(&cfg, 1, true)
+	s, err := NewStructure(withStats(&cfg), 1)
 	require.NoError(t, err)
 	cfg = config.FairnessTrackerConfig{}
 
@@ -71,7 +77,7 @@ func TestNewStructureSnapshotsConfig(t *testing.T) {
 
 func TestNewStructure(t *testing.T) {
 	conf := validStructureConfig()
-	structure, err := NewStructure(&conf, 1, true)
+	structure, err := NewStructure(withStats(&conf), 1)
 	assert.NoError(t, err)
 	assert.NotNil(t, structure)
 
@@ -81,7 +87,7 @@ func TestNewStructure(t *testing.T) {
 
 func TestGetID(t *testing.T) {
 	conf := validStructureConfig()
-	structure, err := NewStructure(&conf, 1, true)
+	structure, err := NewStructure(withStats(&conf), 1)
 	assert.NoError(t, err)
 	assert.NotNil(t, structure)
 
@@ -97,7 +103,7 @@ func TestEndToEnd(t *testing.T) {
 		Lambda:                   0,
 		FinalProbabilityFunction: config.MeanFinalProbabilityFunction,
 	}
-	structure, err := NewStructure(conf, 1, true)
+	structure, err := NewStructure(withStats(conf), 1)
 	assert.NoError(t, err)
 	assert.NotNil(t, structure)
 
@@ -195,7 +201,7 @@ func TestAdjustProbability(t *testing.T) {
 
 // Explicitly test nil config case
 func TestNewStructureRejectsNilConfig(t *testing.T) {
-	structure, err := NewStructure(nil, 1, false)
+	structure, err := NewStructure(nil, 1)
 	assert.Nil(t, structure)
 
 	// Expect an error instead of panic
@@ -237,7 +243,7 @@ func TestRegisterRequestCallsFinalProbabilityFunction(t *testing.T) {
 	}
 
 	// Create the data structure with our custom config
-	structure, err := NewStructure(conf, 1, true)
+	structure, err := NewStructure(withStats(conf), 1)
 	assert.NoError(t, err, "expected no error when creating structure")
 	assert.NotNil(t, structure, "expected non-nil structure")
 
@@ -313,7 +319,7 @@ func TestReportOutcomeClampsProbability(t *testing.T) {
 				Pd:                       tc.pd,
 				FinalProbabilityFunction: config.MeanFinalProbabilityFunction,
 			}
-			structure, err := NewStructure(conf, 1, false)
+			structure, err := NewStructure(conf, 1)
 			require.NoError(t, err, "NewStructure should not return an error with valid config")
 
 			clientID := []byte("test-client")
@@ -342,7 +348,7 @@ func TestReportOutcomeClamping_Concurrent(t *testing.T) {
 		FinalProbabilityFunction: config.MeanFinalProbabilityFunction,
 	}
 
-	structure, err := NewStructure(conf, 1, false)
+	structure, err := NewStructure(conf, 1)
 	require.NoError(t, err)
 
 	clientID := []byte("concurrent-client")
@@ -406,7 +412,7 @@ func TestDecayClockRollback(t *testing.T) {
 	cfg := validStructureConfig()
 	cfg.Pi, cfg.Pd, cfg.Lambda = .5, .125, math.Ln2 // Half-life of one second.
 	clock := &decayClock{millis: -500}
-	s, err := NewStructureWithClock(&cfg, 1, true, clock)
+	s, err := NewStructureWithClock(withStats(&cfg), 1, clock)
 	require.NoError(t, err)
 	ctx, id := context.Background(), []byte("client")
 	check := func(millis int64, want float64) {
