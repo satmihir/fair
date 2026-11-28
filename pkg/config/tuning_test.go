@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"math"
 	"testing"
 
 	"github.com/satmihir/fair/pkg/logger"
@@ -106,4 +107,38 @@ func TestDefaultFairnessTrackerConfig_GenerateError(t *testing.T) {
 	require.Panics(t, func() {
 		_ = DefaultFairnessTrackerConfig()
 	})
+}
+
+func TestCalculateLInvalid(t *testing.T) {
+	for _, tc := range []struct {
+		b, m uint32
+		p    float64
+	}{
+		{0, 1, 0.5}, {1, 1, 0.5}, {2, 0, 0.5},
+		{2, 1, 0}, {2, 1, 1}, {2, 1, math.NaN()}, {2, 1, math.Inf(1)},
+		{2, 32, 0.1},             // Finite result beyond uint32.
+		{2, math.MaxUint32, 0.5}, // No-collision probability underflows.
+	} {
+		require.Zero(t, CalculateL(tc.b, tc.m, tc.p), "B=%d M=%d p=%g", tc.b, tc.m, tc.p)
+	}
+}
+
+func TestCalculateLRareEmptyBucket(t *testing.T) {
+	// Subtracting (2/3)^100 from one rounds to one, but the raw level
+	// count is about 45.137 and the requested probability is achievable.
+	require.Equal(t, uint32(46), CalculateL(3, 100, math.Nextafter(1, 0)))
+}
+
+func TestGenerateTunedStructureConfigLimits(t *testing.T) {
+	for _, tc := range []struct{ flows, buckets uint32 }{
+		{0, 1000}, {1000, 0}, {1000, 1}, {32000, 2},
+	} {
+		c, err := GenerateTunedStructureConfig(tc.flows, tc.buckets, 1)
+		require.Error(t, err)
+		require.Nil(t, c)
+	}
+	c, err := GenerateTunedStructureConfig(1, math.MaxUint32, 1)
+	require.NoError(t, err)
+	require.Equal(t, 1.0, c.Pi)
+	require.NoError(t, c.ValidateStructure())
 }
