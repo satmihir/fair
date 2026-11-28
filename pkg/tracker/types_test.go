@@ -10,9 +10,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/satmihir/fair/v2/internal/testutils"
 	"github.com/satmihir/fair/v2/pkg/config"
 	"github.com/satmihir/fair/v2/pkg/request"
-	"github.com/satmihir/fair/v2/pkg/testutils"
 )
 
 func TestFairnessTrackerError(t *testing.T) {

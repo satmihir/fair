@@ -11,7 +11,7 @@ proto:
 # Build the project
 build: proto
 	@echo "Building..."
-	@go build -o fair ./
+	@go build ./...
 	@echo "✅ Build completed"
 
 # Run tests
@@ -25,7 +25,8 @@ test: proto
 # Clean build artifacts
 clean:
 	@echo "Cleaning..."
-	@rm -f fair
+	@go clean ./...
+	@rm -f fair coverage.out
 	@echo "✅ Clean completed"
 
 # Default target

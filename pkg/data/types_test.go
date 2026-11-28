@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/satmihir/fair/v2/pkg/testutils"
+	"github.com/satmihir/fair/v2/internal/testutils"
 )
 
 func TestDataError(t *testing.T) {

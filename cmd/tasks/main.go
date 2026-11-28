@@ -1,4 +1,6 @@
-// tasks.go
+// Command tasks runs repository maintenance tasks.
+//
+// From the repository root: go run ./cmd/tasks check
 package main
 
 import (
@@ -10,7 +12,7 @@ import (
 func main() {
 	// Default usage if no arguments
 	if len(os.Args) < 2 {
-		fmt.Println("Usage: go run tasks.go [lint|check]")
+		fmt.Println("Usage: go run ./cmd/tasks check")
 		os.Exit(1)
 	}
 
